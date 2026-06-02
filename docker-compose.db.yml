@@ -1,0 +1,32 @@
+# PostgreSQL embebido (solo si NO tiene PostgreSQL en el host).
+# Puerto 5433 en el host para no chocar con GeoNode (5432).
+#
+# Uso: docker-compose -f docker-compose.yml -f docker-compose.db.yml up -d
+# DATABASE_URL=postgresql+psycopg://sgc:sgc@db:5432/catastro_lab
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: sgc
+      POSTGRES_PASSWORD: sgc
+      POSTGRES_DB: catastro_lab
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sgc -d catastro_lab"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://sgc:sgc@db:5432/catastro_lab
+
+volumes:
+  postgres_data:

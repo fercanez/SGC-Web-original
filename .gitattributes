@@ -1,0 +1,2 @@
+# Scripts shell deben usar LF (Linux); evita error "set: Illegal option -" en la VM
+*.sh text eol=lf
