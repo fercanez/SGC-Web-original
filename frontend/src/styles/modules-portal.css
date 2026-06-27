@@ -1,0 +1,262 @@
+/* Portal de módulos — tarjetas amplias, iconos guinda monocromáticos. */
+
+.modules-portal-card {
+  width: min(920px, calc(100% - 32px));
+  margin: 28px auto 40px;
+  background: #fff;
+  border: 1px solid #b8bcc4;
+  border-radius: 6px;
+  padding: 28px 32px 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+  box-sizing: border-box;
+}
+
+.modules-portal-card h2 {
+  margin: 0 0 8px;
+  color: #703341;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.modules-portal-aviso {
+  margin: 0 0 24px;
+  color: #555;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.modules-portal-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modules-portal-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #ddd5d8;
+  border-radius: 8px;
+  padding: 0;
+  background: #fff;
+  color: #703341;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  min-height: 88px;
+  overflow: hidden;
+}
+
+.modules-portal-item:hover:not(:disabled) {
+  background: #faf5f6;
+  border-color: #703341;
+  box-shadow: 0 4px 12px rgba(112, 51, 65, 0.12);
+}
+
+.modules-portal-item:focus-visible {
+  outline: 2px solid #c9a227;
+  outline-offset: 2px;
+}
+
+.modules-portal-item:disabled,
+.modules-portal-item.modules-portal-item-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  background: #f8f9fa;
+}
+
+.modules-portal-item-icono {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #fdf8f9 0%, #f5ecee 100%);
+  border-right: 1px solid #e8dce0;
+  color: #703341;
+}
+
+.modules-portal-item-cuerpo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  min-width: 0;
+}
+
+.modules-portal-item-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.modules-portal-item-texto strong {
+  display: block;
+  color: #703341;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+
+.modules-portal-item-texto span {
+  display: block;
+  color: #666;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.modules-portal-item-badge {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.modules-portal-item-flecha {
+  flex-shrink: 0;
+  color: #703341;
+  font-weight: 900;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding-right: 4px;
+}
+
+.modules-portal-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e4e7ec;
+}
+
+.modules-portal-btn-salir {
+  padding: 10px 18px;
+  background: #eceff3;
+  color: #444;
+  border: 1px solid #c8ced8;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.modules-portal-btn-salir:hover {
+  background: #e2e6eb;
+}
+
+.modules-portal-vacio {
+  padding: 24px;
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .modules-portal-card {
+    padding: 20px 16px;
+    margin: 16px auto 28px;
+  }
+
+  .modules-portal-item-icono {
+    flex: 0 0 36px;
+  }
+
+  .modules-portal-item-cuerpo {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+  }
+
+  .modules-portal-item-texto strong {
+    font-size: 0.95rem;
+  }
+}
+
+/* Placeholder de módulo en desarrollo */
+
+.module-placeholder-card {
+  width: min(720px, calc(100% - 32px));
+  margin: 28px auto 40px;
+  background: #fff;
+  border: 1px solid #b8bcc4;
+  border-radius: 6px;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.module-placeholder-icon {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #fdf8f9 0%, #f5ecee 100%);
+  border: 1px solid #e8dce0;
+  border-radius: 12px;
+  color: #703341;
+}
+
+.module-placeholder-card h2 {
+  margin: 0 0 12px;
+  color: #703341;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.module-placeholder-card p {
+  margin: 0 0 24px;
+  color: #555;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.module-placeholder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.module-placeholder-btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.module-placeholder-btn-primary {
+  background: #703341;
+  color: #fff;
+  border-color: #5c2834;
+}
+
+.module-placeholder-btn-primary:hover {
+  background: #5c2834;
+}
+
+.module-placeholder-btn-secondary {
+  background: #eceff3;
+  color: #444;
+  border-color: #c8ced8;
+}
+
+.module-placeholder-btn-secondary:hover {
+  background: #e2e6eb;
+}

@@ -1,0 +1,16 @@
+# Fragmento para /etc/apache2/conf-available/sgc-web.conf
+# Después de editar: sudo a2enconf sgc-web && sudo systemctl reload apache2
+
+# Evita que /login (raíz) muestre un build viejo o caiga en GeoNode
+RedirectMatch 301 ^/login/?$ /sgc-web/login/
+
+Alias /sgc-web/ /var/www/sgc-web/
+<Directory /var/www/sgc-web/>
+    Options -Indexes +FollowSymLinks
+    AllowOverride None
+    Require all granted
+    FallbackResource /sgc-web/index.html
+</Directory>
+
+ProxyPass        /sgc-web-api/ http://127.0.0.1:9100/
+ProxyPassReverse /sgc-web-api/ http://127.0.0.1:9100/

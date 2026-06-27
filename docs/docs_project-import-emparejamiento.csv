@@ -1,0 +1,16 @@
+Title,Body,Labels,Priority,Status,Estimate,Milestone
+MF-001 Paridad búsqueda de predios,"Objetivo: igualar endpoint de búsqueda de predios entre repos. Alcance: criterios por clave, propietario y dirección. Entregable: endpoint operativo + pruebas básicas + evidencia en PR.",backend,high,Todo,3d,Fase 1
+MF-002 Paridad ficha predial,"Objetivo: exponer ficha predial con mismo contrato funcional del sistema maduro. Entregable: endpoint ficha + validación con frontend + casos de prueba.",backend,high,Todo,3d,Fase 1
+MF-003 Paridad movimientos/historial,"Objetivo: implementar consulta de movimientos del padrón en SGC-Web. Entregable: endpoint historial + filtros mínimos + validación de respuesta.",backend,high,Todo,2d,Fase 1
+MF-004 Homologar autenticación y roles,"Objetivo: replicar flujo de autenticación/autorización crítico del sistema maduro. Entregable: middleware y control de roles funcional en endpoints prioritarios.",backend,high,Todo,3d,Fase 1
+MF-005 Mapa base catastral operativo,"Objetivo: habilitar capa catastral principal en frontend con datos reales. Entregable: visualización de capa + navegación + estabilidad.",frontend,high,Todo,3d,Fase 1
+MF-006 Click mapa -> ficha predial,"Objetivo: al seleccionar predio en mapa, desplegar ficha/campos clave. Entregable: interacción mapa y conexión con endpoint ficha.",frontend,high,Todo,2d,Fase 1
+MF-007 Filtro espacial bbox/zoom,"Objetivo: reducir carga geográfica aplicando filtros bbox/zoom desde backend. Entregable: endpoint con filtros espaciales + mejora de tiempo de respuesta.",performance,high,Todo,2d,Fase 2
+MF-008 Catálogos para filtros UI,"Objetivo: exponer catálogos requeridos para filtros del sistema (zonas, tipos, etc.). Entregable: endpoints de catálogos + integración frontend.",backend,medium,Todo,2d,Fase 2
+MF-009 Endurecer docker-compose despliegue,"Objetivo: preparar despliegue confiable con healthchecks, orden de arranque y variables limpias. Entregable: compose validado en entorno de prueba.",devops,medium,Todo,2d,Fase 3
+MF-010 Pruebas de humo post-deploy,"Objetivo: verificar operación mínima tras despliegue (health, DB, mapa, ficha). Entregable: script/checklist de smoke tests ejecutable.",qa,medium,Todo,1d,Fase 3
+PERF-001 Optimizar /predios/search,"Objetivo: alcanzar p95 objetivo en búsqueda. Entregable: tuning SQL/índices + evidencia de métricas antes/después.",performance,high,Todo,2d,Fase 2
+PERF-002 Optimizar /map/predios por bbox,"Objetivo: mejorar respuesta de endpoint geográfico principal. Entregable: índices espaciales + payload optimizado + benchmark.",performance,high,Todo,2d,Fase 2
+PERF-003 Optimizar /predios/{clave},"Objetivo: acelerar consulta de ficha individual. Entregable: query optimizada + caché selectiva (si aplica) + prueba de rendimiento.",performance,medium,Todo,1d,Fase 2
+OPS-001 Documentar runbook deploy/rollback,"Objetivo: definir pasos operativos de despliegue y reversión. Entregable: documentación en docs/ con versión y checklist.",devops,medium,Todo,1d,Fase 3
+OPS-002 Estandarizar .env.example,"Objetivo: centralizar variables de entorno necesarias para levantar backend/frontend/db. Entregable: .env.example validado y documentado.",devops,medium,Todo,1d,Fase 3

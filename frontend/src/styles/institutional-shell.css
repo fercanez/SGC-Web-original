@@ -1,0 +1,71 @@
+/* Barra institucional compartida (login, portal de módulos, placeholders). */
+
+.inst-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #eef1f5;
+}
+
+.inst-topbar {
+  background: linear-gradient(180deg, #7a3a49 0%, #703341 55%, #5c2834 100%);
+  color: #fff;
+  padding: 14px clamp(16px, 3vw, 40px) 16px;
+  border-bottom: 3px solid #c9a227;
+  flex-shrink: 0;
+}
+
+.inst-topbar-marca {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.inst-topbar-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.inst-topbar-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inst-topbar-linea {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  opacity: 0.92;
+}
+
+.inst-topbar-linea-principal {
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 900;
+  opacity: 1;
+}
+
+.inst-topbar-linea-municipio {
+  font-size: 13px;
+  text-transform: none;
+  font-weight: 800;
+}
+
+.inst-topbar-bienvenida {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+
+.inst-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
