@@ -957,6 +957,8 @@ export default function DashboardPage() {
           geometryLoading={geometryLoading}
           dibujadoEnMapa={dibujadoEnMapa}
           currency={currency}
+          geonodeLayers={geonodeLayers}
+          wmsPath={config?.geonode.wms_proxy_path ?? "/api/v1/geonode/wms"}
           searchResults={searchResults}
           onNavigate={selectPadronRecord}
           onClose={() => setFichaOpen(false)}

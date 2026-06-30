@@ -12,6 +12,7 @@ import {
   type FiscalStatus,
 } from "../utils/fiscal";
 import FichaMiniMap from "./FichaMiniMap";
+import type { GeonodeLayer } from "../types/config";
 import "../styles/ficha-catastral.css";
 
 export type FichaCatastralTab =
@@ -44,6 +45,8 @@ interface Props {
   geometryLoading?: boolean;
   dibujadoEnMapa: boolean;
   currency: string;
+  geonodeLayers?: GeonodeLayer[];
+  wmsPath?: string;
   searchResults?: PredioAlfanumericoRecord[];
   onNavigate?: (record: PredioAlfanumericoRecord) => void;
   onClose: () => void;
@@ -91,6 +94,8 @@ function FichaDatosTab({
   propietariosLoading,
   propietariosError,
   propietariosTotal,
+  geonodeLayers,
+  wmsPath,
 }: {
   padron: PredioAlfanumericoRecord;
   geometry: GeoJSON.Geometry | null;
@@ -101,6 +106,8 @@ function FichaDatosTab({
   propietariosLoading: boolean;
   propietariosError: string | null;
   propietariosTotal: number;
+  geonodeLayers: GeonodeLayer[];
+  wmsPath: string;
 }) {
   const centro = useMemo(() => centroidFromGeometry(geometry), [geometry]);
   const streetViewSrc = centro
@@ -131,7 +138,7 @@ function FichaDatosTab({
     Math.abs(propietariosTotal - 100) < 0.02;
 
   return (
-    <div className="ficha-datos-grid">
+    <div className="ficha-datos-layout">
       <section className="ficha-datos-col ficha-datos-form">
         <table className="ficha-datos-table">
           <tbody>
@@ -204,6 +211,7 @@ function FichaDatosTab({
         </div>
       </section>
 
+      <div className="ficha-datos-media">
       <section className="ficha-datos-col ficha-datos-street">
         <h3 className="ficha-panel-title">Vista de calle</h3>
         {geometryLoading && (
@@ -247,7 +255,12 @@ function FichaDatosTab({
         {geometryLoading ? (
           <div className="ficha-media-placeholder">Cargando mapa…</div>
         ) : (
-          <FichaMiniMap clave={padron.clave_catastral} geometry={geometry} />
+          <FichaMiniMap
+            clave={padron.clave_catastral}
+            geometry={geometry}
+            geonodeLayers={geonodeLayers}
+            wmsPath={wmsPath}
+          />
         )}
         <p className="ficha-map-status">
           Cartografía:{" "}
@@ -258,6 +271,7 @@ function FichaDatosTab({
               : "Sin cartografía directa"}
         </p>
       </section>
+      </div>
     </div>
   );
 }
@@ -269,6 +283,8 @@ export default function FichaCatastralModal({
   geometryLoading = false,
   dibujadoEnMapa,
   currency,
+  geonodeLayers = [],
+  wmsPath = "/api/v1/geonode/wms",
   searchResults = [],
   onNavigate,
   onClose,
@@ -409,6 +425,8 @@ export default function FichaCatastralModal({
               propietariosLoading={propietariosLoading}
               propietariosError={propietariosError}
               propietariosTotal={propietariosTotal}
+              geonodeLayers={geonodeLayers}
+              wmsPath={wmsPath}
             />
           )}
           {tab === "construccion" && (
