@@ -14,6 +14,7 @@ import CadastralSidebar, {
   type SearchFields,
   type SidebarSection,
 } from "../components/CadastralSidebar";
+import FichaCatastralModal from "../components/FichaCatastralModal";
 import ResultadosCatastrales, {
   type ResultsPanelMode,
 } from "../components/ResultadosCatastrales";
@@ -152,6 +153,7 @@ export default function DashboardPage() {
     useState<GeoJSON.FeatureCollection | null>(null);
   const [mapHighlightsLoading, setMapHighlightsLoading] = useState(false);
   const [mapFitNonce, setMapFitNonce] = useState(0);
+  const [fichaOpen, setFichaOpen] = useState(false);
   const loadSeqRef = useRef(0);
   const layersSyncedKeyRef = useRef("");
   const predioWmsNearRef = useRef(false);
@@ -512,6 +514,7 @@ export default function DashboardPage() {
     predioWmsNearRef.current = false;
     const activeRecord = record;
     setPadron(activeRecord);
+    setFichaOpen(true);
     setSearchError(null);
     if (searchTotal > 0) setResultsPanelMode("open");
     setSidebarSection("consulta");
@@ -945,6 +948,20 @@ export default function DashboardPage() {
           />
         )}
       </div>
+
+      {padron && (
+        <FichaCatastralModal
+          open={fichaOpen}
+          padron={padron}
+          geometry={highlightGeometry}
+          geometryLoading={geometryLoading}
+          dibujadoEnMapa={dibujadoEnMapa}
+          currency={currency}
+          searchResults={searchResults}
+          onNavigate={selectPadronRecord}
+          onClose={() => setFichaOpen(false)}
+        />
+      )}
     </div>
   );
 }
