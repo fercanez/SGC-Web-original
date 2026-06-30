@@ -150,29 +150,43 @@
 .ficha-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0;
-  background: #eceff3;
-  border-bottom: 1px solid #cfd6df;
-  padding: 0 8px;
+  gap: 4px;
+  background: linear-gradient(180deg, #e8eaee 0%, #dfe3e8 100%);
+  border-bottom: 2px solid #b8c0cc;
+  padding: 6px 8px 0;
 }
 
 .ficha-tabs button {
-  border: none;
-  background: transparent;
-  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: rgba(255, 255, 255, 0.45);
+  padding: 10px 16px;
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  color: #4b5563;
+  letter-spacing: 0.35px;
+  color: #5c6573;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -2px;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ficha-tabs button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.85);
+  color: #7a3a49;
 }
 
 .ficha-tabs button.active {
-  color: #7a3a49;
-  background: #fff;
-  border-bottom-color: #7a3a49;
+  color: #fff;
+  background: linear-gradient(180deg, #9a4d5d 0%, #7a3a49 48%, #5c2834 100%);
+  border-color: #7a3a49;
+  border-bottom: 2px solid #7a3a49;
+  box-shadow:
+    0 -2px 0 #c9a227 inset,
+    0 4px 14px rgba(90, 40, 52, 0.35);
+  position: relative;
+  z-index: 1;
 }
 
 .ficha-body {
@@ -256,21 +270,39 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  border: 2px solid #7a3a49;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(90, 40, 52, 0.12);
 }
 
 .ficha-datos-table th,
 .ficha-datos-table td {
-  border: 1px solid #e5e7eb;
-  padding: 6px 8px;
-  vertical-align: top;
+  border: 1px solid #b88996;
+  padding: 8px 11px;
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+.ficha-datos-table tr:nth-child(even) td {
+  background: #fff8fa;
 }
 
 .ficha-datos-table th {
-  width: 42%;
-  background: #f8fafc;
-  color: #374151;
-  font-weight: 700;
+  width: 44%;
+  background: linear-gradient(180deg, #ede0e4 0%, #dcc9d0 100%);
+  color: #5c2834;
+  font-weight: 800;
   text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+  border-right: 2px solid #9a5a6a;
+}
+
+.ficha-datos-table td {
+  color: #111827;
+  font-weight: 700;
+  background: #ffffff;
 }
 
 .ficha-titularidad {
@@ -289,19 +321,22 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  border: 2px solid #7a3a49;
 }
 
 .ficha-titularidad-table th,
 .ficha-titularidad-table td {
-  border: 1px solid #e5e7eb;
-  padding: 6px 8px;
+  border: 1px solid #b88996;
+  padding: 8px 11px;
   text-align: left;
 }
 
 .ficha-titularidad-table thead th {
-  background: #f3f4f6;
+  background: linear-gradient(180deg, #ede0e4 0%, #dcc9d0 100%);
   font-size: 11px;
   text-transform: uppercase;
+  font-weight: 800;
+  color: #5c2834;
 }
 
 .ficha-copropiedad-total {
@@ -379,6 +414,12 @@
   cursor: not-allowed;
 }
 
+.ficha-btn-capas.active {
+  background: #7a3a49;
+  color: #fff;
+  border-color: #7a3a49;
+}
+
 .ficha-mini-map-wrap {
   flex: 1;
   display: flex;
@@ -387,43 +428,172 @@
   min-height: 0;
 }
 
+.ficha-mini-map-stage {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
 .ficha-mini-map {
   flex: 1;
   min-height: 300px;
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid #d1d5db;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 
-.ficha-mini-map-layers {
+.ficha-mini-map--ready {
+  opacity: 1;
+}
+
+.ficha-mini-map--loading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ficha-capas-panel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  width: min(300px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #c4cdd8;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  padding: 10px 10px 12px;
+}
+
+.ficha-capas-panel-head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  padding: 6px 8px;
-  background: #f8fafc;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 12px;
+  color: #7a3a49;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ficha-capas-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.ficha-capas-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ficha-capas-item {
   border: 1px solid #e2e8f0;
   border-radius: 6px;
+  padding: 8px;
+  background: #fafbfc;
 }
 
-.ficha-mini-layer-item {
-  display: inline-flex;
+.ficha-capas-item-top {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
   font-size: 11px;
   font-weight: 700;
   color: #374151;
-  cursor: pointer;
-  user-select: none;
 }
 
-.ficha-mini-layer-item input {
-  accent-color: #7a3a49;
+.ficha-capas-accent {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  display: inline-block;
 }
 
-.ficha-mini-layer-pct {
+.ficha-capas-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ficha-capas-pct {
   font-size: 10px;
   color: #6b7280;
   font-weight: 600;
+}
+
+.ficha-capas-slider {
+  width: 100%;
+  margin: 6px 0 4px;
+  accent-color: #7a3a49;
+}
+
+.ficha-capas-order {
+  display: flex;
+  gap: 6px;
+}
+
+.ficha-capas-order button {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.ficha-capas-order button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ficha-capas-basemap {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ficha-capas-basemap strong {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #7a3a49;
+  letter-spacing: 0.3px;
+}
+
+.ficha-capas-basemap-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.ficha-capas-basemap-opt input {
+  accent-color: #7a3a49;
 }
 
 .ficha-mini-map--empty {

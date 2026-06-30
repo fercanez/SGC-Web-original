@@ -75,3 +75,7 @@ export const BASE_MAP_OPTIONS: { id: BaseMapId; label: string }[] = [
   { id: "googleSat", label: "Google Satellite" },
   { id: "googleHybrid", label: "Google Hybrid" },
 ];
+
+/** Requerido si el estilo incluye capas symbol con text-field (cotas, vértices). */
+export const MAPLIBRE_GLYPHS_URL =
+  "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";

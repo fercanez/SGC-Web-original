@@ -112,6 +112,19 @@ export function getPredioPropietarios(
   );
 }
 
+export interface PredioFolioRealResponse {
+  clave_catastral: string;
+  folio_real: string | null;
+}
+
+export function getPredioFolioReal(
+  clave: string
+): Promise<PredioFolioRealResponse> {
+  return fetchJson(
+    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}/folio-real`
+  );
+}
+
 export interface PredioAlfanumericoRecord {
   id: string;
   parcel_id: string | null;

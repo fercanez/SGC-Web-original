@@ -5,6 +5,7 @@ import type { GeoJSONFeatureCollection } from "../api";
 import {
   buildGeonodeWmsTileUrl,
   getBaseMapRasterSource,
+  MAPLIBRE_GLYPHS_URL,
 } from "../map/wms";
 import type { BaseMapId } from "./CadastralSidebar";
 import {
@@ -59,6 +60,8 @@ function scheduleMapFit(map: maplibregl.Map, fn: () => void) {
     map.once("load", arm);
   }
 }
+const SEARCH_LABEL_FONT = ["Open Sans Regular", "Arial Unicode MS Regular"];
+
 function hasLayer(map: maplibregl.Map | null | undefined, id: string): boolean {
   try {
     if (!map) return false;
@@ -73,6 +76,7 @@ function restackWmsLayers(map: maplibregl.Map, layers: PublicConfig["geonode"]["
   const highlightIds = [
     "search-highlight-fill",
     "search-highlight-line",
+    "search-highlight-labels",
     "active-highlight-fill",
     "active-highlight-halo",
     "active-highlight-line",
@@ -104,6 +108,7 @@ function moveHighlightLayersToTop(map: maplibregl.Map) {
   const ids = [
     "search-highlight-fill",
     "search-highlight-line",
+    "search-highlight-labels",
     "active-highlight-fill",
     "active-highlight-halo",
     "active-highlight-line",
@@ -249,6 +254,7 @@ export default function CadastralMap({
       container: containerRef.current,
       style: {
         version: 8,
+        glyphs: MAPLIBRE_GLYPHS_URL,
         sources,
         layers,
       },
@@ -437,6 +443,9 @@ export default function CadastralMap({
     if (!map) return;
 
     const clearSearchLayers = () => {
+      if (hasLayer(map, "search-highlight-labels")) {
+        map.removeLayer("search-highlight-labels");
+      }
       if (hasLayer(map,"search-highlight-line")) {
         map.removeLayer("search-highlight-line");
         map.removeLayer("search-highlight-fill");
@@ -506,13 +515,37 @@ export default function CadastralMap({
               "case",
               hideSelected,
               0,
-              1.5,
+              showFiscalManzana ? 2.5 : 1.5,
             ],
             "line-opacity": [
               "case",
               hideSelected,
               0,
-              0.85,
+              0.92,
+            ],
+          },
+        });
+        map.addLayer({
+          id: "search-highlight-labels",
+          type: "symbol",
+          source: "search-highlights",
+          layout: {
+            "text-field": ["get", "clave"],
+            "text-font": SEARCH_LABEL_FONT,
+            "text-size": 12,
+            "text-letter-spacing": 0.04,
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+          },
+          paint: {
+            "text-color": "#111111",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 2.5,
+            "text-opacity": [
+              "case",
+              hideSelected,
+              0,
+              1,
             ],
           },
         });
@@ -542,14 +575,47 @@ export default function CadastralMap({
           "case",
           hideSelected,
           0,
-          1.5,
+          showFiscalManzana ? 2.5 : 1.5,
         ]);
         map.setPaintProperty("search-highlight-line", "line-opacity", [
           "case",
           hideSelected,
           0,
-          1,
+          0.92,
         ]);
+        if (!hasLayer(map, "search-highlight-labels")) {
+          map.addLayer({
+            id: "search-highlight-labels",
+            type: "symbol",
+            source: "search-highlights",
+            layout: {
+              "text-field": ["get", "clave"],
+              "text-font": SEARCH_LABEL_FONT,
+              "text-size": 12,
+              "text-letter-spacing": 0.04,
+              "text-allow-overlap": true,
+              "text-ignore-placement": true,
+            },
+            paint: {
+              "text-color": "#111111",
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 2.5,
+              "text-opacity": [
+                "case",
+                hideSelected,
+                0,
+                1,
+              ],
+            },
+          });
+        } else {
+          map.setPaintProperty("search-highlight-labels", "text-opacity", [
+            "case",
+            hideSelected,
+            0,
+            1,
+          ]);
+        }
       }
       restackWmsLayers(map, geonodeLayers);
     };
@@ -744,6 +810,9 @@ export default function CadastralMap({
             maxZoom: 17.5,
             duration: 700,
           });
+          map.once("moveend", () => {
+            onPredioWmsProximity?.(map.getZoom() >= PREDIOS_WMS_NEAR_ZOOM);
+          });
         }
       }
     };
@@ -756,18 +825,21 @@ export default function CadastralMap({
     if (!map || !mapReady || !onPredioWmsProximity) return;
 
     const onZoom = () => {
-      if (!activeHighlight?.geometry) return;
+      const hasContext =
+        Boolean(activeHighlight?.geometry) ||
+        Boolean(searchHighlights?.features?.length);
+      if (!hasContext) return;
       onPredioWmsProximity(map.getZoom() >= PREDIOS_WMS_NEAR_ZOOM);
     };
 
     map.on("zoomend", onZoom);
-    if (activeHighlight?.geometry) {
+    if (activeHighlight?.geometry || searchHighlights?.features?.length) {
       onPredioWmsProximity(map.getZoom() >= PREDIOS_WMS_NEAR_ZOOM);
     }
     return () => {
       map.off("zoomend", onZoom);
     };
-  }, [activeHighlight, mapReady, onPredioWmsProximity]);
+  }, [activeHighlight, searchHighlights, mapReady, onPredioWmsProximity]);
 
   return (
     <div className="map-root">

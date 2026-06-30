@@ -267,6 +267,40 @@ def link_cadastral_to_parcels(
     stats = link_all_records(db, sync_summary=True)
     db.commit()
     return stats
+
+
+@router.get("/{clave}/folio-real")
+def folio_real_predio(
+    clave: str,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("cadastral.read")),
+):
+    """Folio real del padrón municipal (catalogos.padron_2026), igual que SGC maduro."""
+    clave_norm = clave.strip().upper()
+    try:
+        row = (
+            db.execute(
+                text("""
+                    SELECT NULLIF(NULLIF(TRIM(p.folio_real::text), ''), '0') AS folio_real
+                    FROM catalogos.padron_2026 p
+                    WHERE UPPER(TRIM(p.clave_catastral)) = :clave
+                    LIMIT 1
+                """),
+                {"clave": clave_norm},
+            )
+            .mappings()
+            .first()
+        )
+    except Exception:
+        row = None
+
+    folio = None
+    if row and row.get("folio_real"):
+        folio = str(row["folio_real"]).strip() or None
+
+    return {"clave_catastral": clave_norm, "folio_real": folio}
+
+
 @router.get("/{clave}/propietarios")
 def propietarios_predio(
     clave: str,

@@ -1,0 +1,29 @@
+[Unit]
+Description=SGC-Web API (FastAPI / uvicorn puerto 9100)
+Documentation=https://github.com/fercanez/SGC-Web-original
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/sgc-web/backend
+
+# Variables de entorno (opcional; la app también lee /opt/sgc-web/.env vía pydantic)
+EnvironmentFile=-/opt/sgc-web/.env
+
+ExecStart=/opt/sgc-web/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9100
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Evita procesos huérfanos si alguien lanzó uvicorn a mano en pts/1
+KillMode=control-group
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sgc-web-api
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  getPredioFolioReal,
   getPredioPropietarios,
   type PredioAlfanumericoRecord,
   type PredioPropietarioItem,
@@ -12,6 +13,7 @@ import {
   type FiscalStatus,
 } from "../utils/fiscal";
 import FichaMiniMap from "./FichaMiniMap";
+import FichaPrintPreview from "./FichaPrintPreview";
 import type { GeonodeLayer } from "../types/config";
 import "../styles/ficha-catastral.css";
 
@@ -42,6 +44,7 @@ interface Props {
   open: boolean;
   padron: PredioAlfanumericoRecord;
   geometry: GeoJSON.Geometry | null;
+  geometryClave?: string | null;
   geometryLoading?: boolean;
   dibujadoEnMapa: boolean;
   currency: string;
@@ -87,6 +90,7 @@ function TabPlaceholder({ title }: { title: string }) {
 function FichaDatosTab({
   padron,
   geometry,
+  geometryClave,
   geometryLoading,
   dibujadoEnMapa,
   currency,
@@ -94,11 +98,15 @@ function FichaDatosTab({
   propietariosLoading,
   propietariosError,
   propietariosTotal,
+  folioReal,
+  folioRealLoading,
   geonodeLayers,
   wmsPath,
+  onOpenPrint,
 }: {
   padron: PredioAlfanumericoRecord;
   geometry: GeoJSON.Geometry | null;
+  geometryClave?: string | null;
   geometryLoading?: boolean;
   dibujadoEnMapa: boolean;
   currency: string;
@@ -106,8 +114,11 @@ function FichaDatosTab({
   propietariosLoading: boolean;
   propietariosError: string | null;
   propietariosTotal: number;
+  folioReal: string | null;
+  folioRealLoading: boolean;
   geonodeLayers: GeonodeLayer[];
   wmsPath: string;
+  onOpenPrint: () => void;
 }) {
   const centro = useMemo(() => centroidFromGeometry(geometry), [geometry]);
   const streetViewSrc = centro
@@ -130,12 +141,17 @@ function FichaDatosTab({
     ["Adeudo total", formatMoney(padron.adeudo_total, currency)],
     ["Uso de suelo predial", val(padron.descripcion_uso)],
     ["Zona homogénea", val(padron.zonah)],
-    ["Folio real", "—"],
+    [
+      "Folio real",
+      folioRealLoading ? "Cargando…" : val(folioReal),
+    ],
   ];
 
   const copropiedadValida =
     propietarios.length > 0 &&
     Math.abs(propietariosTotal - 100) < 0.02;
+
+  const [layersPanelOpen, setLayersPanelOpen] = useState(false);
 
   return (
     <div className="ficha-datos-layout">
@@ -238,17 +254,20 @@ function FichaDatosTab({
         <div className="ficha-map-toolbar">
           <h3 className="ficha-panel-title">Localización cartográfica</h3>
           <div className="ficha-map-actions">
-            <button type="button" className="ficha-btn-secondary" disabled>
+            <button
+              type="button"
+              className="ficha-btn-secondary"
+              onClick={onOpenPrint}
+              disabled={geometryLoading}
+            >
               Imprimir / PDF
             </button>
             <button
               type="button"
-              className="ficha-btn-secondary"
-              onClick={() => {
-                void navigator.clipboard?.writeText(padron.clave_catastral);
-              }}
+              className={`ficha-btn-secondary ficha-btn-capas${layersPanelOpen ? " active" : ""}`}
+              onClick={() => setLayersPanelOpen((v) => !v)}
             >
-              Copiar
+              Capas
             </button>
           </div>
         </div>
@@ -258,8 +277,11 @@ function FichaDatosTab({
           <FichaMiniMap
             clave={padron.clave_catastral}
             geometry={geometry}
+            geometryClave={geometryClave}
             geonodeLayers={geonodeLayers}
             wmsPath={wmsPath}
+            layersPanelOpen={layersPanelOpen}
+            onCloseLayersPanel={() => setLayersPanelOpen(false)}
           />
         )}
         <p className="ficha-map-status">
@@ -280,6 +302,7 @@ export default function FichaCatastralModal({
   open,
   padron,
   geometry,
+  geometryClave = null,
   geometryLoading = false,
   dibujadoEnMapa,
   currency,
@@ -294,6 +317,9 @@ export default function FichaCatastralModal({
   const [propietariosTotal, setPropietariosTotal] = useState(0);
   const [propietariosLoading, setPropietariosLoading] = useState(false);
   const [propietariosError, setPropietariosError] = useState<string | null>(null);
+  const [folioReal, setFolioReal] = useState<string | null>(null);
+  const [folioRealLoading, setFolioRealLoading] = useState(false);
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
 
   const fiscal = fiscalStatusFromAdeudos(padron.adeudo_2026, padron.adeudo_total);
 
@@ -328,13 +354,29 @@ export default function FichaCatastralModal({
   }, [open, tab, padron.clave_catastral]);
 
   useEffect(() => {
+    if (!open || tab !== "datos") return;
+    setFolioRealLoading(true);
+    setFolioReal(null);
+    getPredioFolioReal(padron.clave_catastral)
+      .then((res) => setFolioReal(res.folio_real))
+      .catch(() => setFolioReal(null))
+      .finally(() => setFolioRealLoading(false));
+  }, [open, tab, padron.clave_catastral]);
+
+  useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (printPreviewOpen) {
+        e.stopPropagation();
+        setPrintPreviewOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, printPreviewOpen]);
 
   if (!open) return null;
 
@@ -347,7 +389,13 @@ export default function FichaCatastralModal({
     .join(" ");
 
   return (
-    <div className="ficha-overlay" role="presentation" onClick={onClose}>
+    <div
+      className="ficha-overlay"
+      role="presentation"
+      onClick={() => {
+        if (!printPreviewOpen) onClose();
+      }}
+    >
       <div
         className={`ficha-workspace ${fiscalBadgeClass(fiscal)}`}
         role="dialog"
@@ -418,6 +466,7 @@ export default function FichaCatastralModal({
             <FichaDatosTab
               padron={padron}
               geometry={geometry}
+              geometryClave={geometryClave}
               geometryLoading={geometryLoading}
               dibujadoEnMapa={dibujadoEnMapa}
               currency={currency}
@@ -425,8 +474,11 @@ export default function FichaCatastralModal({
               propietariosLoading={propietariosLoading}
               propietariosError={propietariosError}
               propietariosTotal={propietariosTotal}
+              folioReal={folioReal}
+              folioRealLoading={folioRealLoading}
               geonodeLayers={geonodeLayers}
               wmsPath={wmsPath}
+              onOpenPrint={() => setPrintPreviewOpen(true)}
             />
           )}
           {tab === "construccion" && (
@@ -443,6 +495,18 @@ export default function FichaCatastralModal({
           {tab === "zona-h" && <TabPlaceholder title="Zona homogénea" />}
         </div>
       </div>
+
+      <FichaPrintPreview
+        open={printPreviewOpen}
+        padron={padron}
+        geometry={geometry}
+        geometryClave={geometryClave}
+        folioReal={folioReal}
+        currency={currency}
+        geonodeLayers={geonodeLayers}
+        wmsPath={wmsPath}
+        onClose={() => setPrintPreviewOpen(false)}
+      />
     </div>
   );
 }

@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { BaseMapId } from "./CadastralSidebar";
 import { buildGeonodeWmsTileUrl, getBaseMapRasterSource } from "../map/wms";
-import { bboxFromGeometry, centroidFromGeometry } from "../utils/geometry";
+import {
+  applyGeonodeRasterOpacity,
+  scheduleGeonodeRasterOpacity,
+} from "../map/wmsLayerState";
+import {
+  bboxFromGeometry,
+  centroidFromGeometry,
+  fitOptionsForGeometry,
+  isWgs84Geometry,
+} from "../utils/geometry";
 import {
   SELECTED_MAP_FILL_OPACITY,
   SELECTED_MAP_HALO,
@@ -17,15 +27,24 @@ import {
   layerRole,
   PREDIOS_WMS_NEAR_OPACITY,
   prediosLayerIds,
-  wmsStackOrder,
 } from "../config/mapLayers";
 import type { GeonodeLayer } from "../types/config";
+import FichaMapLayersPanel, {
+  buildFichaLayerOrder,
+  layerTitle,
+  type FichaPlanoLayerId,
+  type FichaPlanoLayerRow,
+} from "./FichaMapLayersPanel";
 
 interface Props {
   clave: string;
   geometry: GeoJSON.Geometry | null;
+  /** Clave catastral a la que pertenece `geometry` (evita flashes al cambiar predio). */
+  geometryClave?: string | null;
   geonodeLayers: GeonodeLayer[];
   wmsPath: string;
+  layersPanelOpen: boolean;
+  onCloseLayersPanel: () => void;
 }
 
 function hasLayer(map: maplibregl.Map, id: string): boolean {
@@ -36,51 +55,65 @@ function hasLayer(map: maplibregl.Map, id: string): boolean {
   }
 }
 
-function restackMiniMapLayers(map: maplibregl.Map, layers: GeonodeLayer[]) {
-  const stackIds = wmsStackOrder(layers).map((l) => `geonode-${l.id}`);
-  const highlightIds = [
-    "highlight-fill",
-    "highlight-halo",
-    "highlight-line",
-  ];
-  let anchor: string | undefined;
-  for (const id of highlightIds) {
-    if (hasLayer(map, id)) {
-      anchor = id;
-      break;
-    }
+function hasSource(map: maplibregl.Map, id: string): boolean {
+  try {
+    return Boolean(map.getSource(id));
+  } catch {
+    return false;
   }
-  for (let i = stackIds.length - 1; i >= 0; i--) {
-    const layerId = stackIds[i];
-    if (!hasLayer(map, layerId)) continue;
+}
+
+function mapLayerId(id: FichaPlanoLayerId): string {
+  return id === "highlight" ? "highlight-line" : `geonode-${id}`;
+}
+
+function restackByOrder(map: maplibregl.Map, order: FichaPlanoLayerId[]) {
+  const ids = order.map(mapLayerId).filter((id) => hasLayer(map, id));
+  for (let i = ids.length - 1; i >= 0; i--) {
     try {
-      if (anchor) map.moveLayer(layerId, anchor);
-      else map.moveLayer(layerId);
+      map.moveLayer(ids[i]);
     } catch {
-      /* ya en posición */
-    }
-    anchor = layerId;
-  }
-  for (const id of highlightIds) {
-    if (hasLayer(map, id)) {
-      try {
-        map.moveLayer(id);
-      } catch {
-        /* */
-      }
+      /* */
     }
   }
+}
+
+function fitMapToGeometry(map: maplibregl.Map, geometry: GeoJSON.Geometry) {
+  const bbox = bboxFromGeometry(geometry);
+  if (!bbox) return;
+  const opts = fitOptionsForGeometry(geometry);
+  map.fitBounds(bbox, { padding: opts.padding, maxZoom: opts.maxZoom, duration: 0 });
 }
 
 export default function FichaMiniMap({
   clave,
   geometry,
+  geometryClave,
   geonodeLayers,
   wmsPath,
+  layersPanelOpen,
+  onCloseLayersPanel,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapBootKeyRef = useRef("");
+  const baseMapAppliedRef = useRef<BaseMapId | null>(null);
+  const visibleLayersRef = useRef<Record<string, boolean>>({});
+  const layerOpacityRef = useRef<Record<string, number>>({});
   const [mapReady, setMapReady] = useState(0);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [baseMap, setBaseMap] = useState<BaseMapId>("googleHybrid");
+
+  const effectiveGeometry = useMemo(() => {
+    if (!geometry || !isWgs84Geometry(geometry)) return null;
+    if (geometryClave && geometryClave !== clave) return null;
+    return geometry;
+  }, [geometry, geometryClave, clave]);
+
+  const geometryKey = useMemo(
+    () => (effectiveGeometry ? `${clave}|${JSON.stringify(effectiveGeometry)}` : ""),
+    [clave, effectiveGeometry]
+  );
 
   const initialVisible = useMemo(() => {
     const vis = buildInitialVisibility(geonodeLayers);
@@ -102,16 +135,37 @@ export default function FichaMiniMap({
 
   const [visibleLayers, setVisibleLayers] = useState(initialVisible);
   const [layerOpacity, setLayerOpacity] = useState(initialOpacity);
+  const [highlightVisible, setHighlightVisible] = useState(true);
+  const [highlightOpacity, setHighlightOpacity] = useState(1);
+  const [layerOrder, setLayerOrder] = useState<FichaPlanoLayerId[]>(() =>
+    buildFichaLayerOrder(geonodeLayers)
+  );
+
+  useEffect(() => {
+    visibleLayersRef.current = visibleLayers;
+  }, [visibleLayers]);
+
+  useEffect(() => {
+    layerOpacityRef.current = layerOpacity;
+  }, [layerOpacity]);
 
   useEffect(() => {
     setVisibleLayers(initialVisible);
     setLayerOpacity(initialOpacity);
-  }, [initialVisible, initialOpacity, clave]);
+    setLayerOrder(buildFichaLayerOrder(geonodeLayers));
+    setHighlightVisible(true);
+    setHighlightOpacity(1);
+  }, [initialVisible, initialOpacity, geonodeLayers, clave]);
 
-  const layerKey = geonodeLayers.map((l) => l.layer).join("|");
+  const layerKey = `${geonodeLayers.map((l) => l.layer).join("|")}|${wmsPath}`;
+  const mapBootKey = `${clave}|${geometryKey}|${layerKey}`;
 
   useEffect(() => {
-    if (!containerRef.current || !geometry) return;
+    setMapVisible(false);
+    if (!containerRef.current || !effectiveGeometry) return;
+
+    const bootKey = mapBootKey;
+    mapBootKeyRef.current = bootKey;
 
     const fc: GeoJSON.FeatureCollection = {
       type: "FeatureCollection",
@@ -119,20 +173,24 @@ export default function FichaMiniMap({
         {
           type: "Feature",
           properties: { clave },
-          geometry,
+          geometry: effectiveGeometry,
         },
       ],
     };
 
+    const center = centroidFromGeometry(effectiveGeometry) ?? [
+      -115.468278, 32.624639,
+    ];
+
     const sources: Record<string, maplibregl.SourceSpecification> = {
-      basemap: getBaseMapRasterSource("googleHybrid"),
+      basemap: getBaseMapRasterSource(baseMap),
       highlight: { type: "geojson", data: fc },
     };
     const layers: maplibregl.LayerSpecification[] = [
       { id: "basemap", type: "raster", source: "basemap" },
     ];
 
-    for (const gl of wmsStackOrder(geonodeLayers)) {
+    for (const gl of geonodeLayers) {
       const srcId = `geonode-${gl.id}`;
       sources[srcId] = {
         type: "raster",
@@ -180,52 +238,135 @@ export default function FichaMiniMap({
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: { version: 8, sources, layers },
-      center: centroidFromGeometry(geometry) ?? [-115.468278, 32.624639],
+      center,
       zoom: 17,
       attributionControl: false,
       interactive: true,
+      fadeDuration: 0,
     });
 
     mapRef.current = map;
-    const onReady = () => {
+
+    const reveal = () => {
+      if (mapBootKeyRef.current !== bootKey) return;
+      baseMapAppliedRef.current = baseMap;
+      fitMapToGeometry(map, effectiveGeometry);
+      scheduleGeonodeRasterOpacity(
+        map,
+        geonodeLayers,
+        visibleLayersRef.current,
+        layerOpacityRef.current
+      );
       setMapReady((n) => n + 1);
-      const bbox = bboxFromGeometry(geometry);
-      if (bbox) {
-        map.fitBounds(bbox, { padding: 32, maxZoom: 19, duration: 0 });
-      }
-      restackMiniMapLayers(map, geonodeLayers);
+      setMapVisible(true);
     };
-    map.once("load", onReady);
-    if (map.isStyleLoaded()) onReady();
+
+    map.once("load", reveal);
 
     return () => {
-      map.off("load", onReady);
+      map.off("load", reveal);
       map.remove();
       mapRef.current = null;
+      setMapVisible(false);
     };
-  }, [clave, geometry, layerKey, wmsPath, geonodeLayers]);
+  }, [clave, geometryKey, layerKey, wmsPath, geonodeLayers, effectiveGeometry, mapBootKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (baseMapAppliedRef.current === baseMap) return;
+
+    if (!hasSource(map, "basemap")) return;
+    const current = map.getStyle();
+    const basemapLayer = current.layers?.find((l) => l.id === "basemap");
+    if (!basemapLayer || basemapLayer.type !== "raster") return;
+
+    try {
+      map.removeLayer("basemap");
+      map.removeSource("basemap");
+    } catch {
+      return;
+    }
+
+    map.addSource("basemap", getBaseMapRasterSource(baseMap));
+    const beforeId = hasLayer(map, "highlight-fill")
+      ? "highlight-fill"
+      : undefined;
+    map.addLayer(
+      { id: "basemap", type: "raster", source: "basemap" },
+      beforeId
+    );
+    baseMapAppliedRef.current = baseMap;
+  }, [baseMap, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
     const apply = () => {
-      for (const gl of geonodeLayers) {
-        const layerId = `geonode-${gl.id}`;
-        if (!hasLayer(map, layerId)) continue;
-        const op = visibleLayers[gl.id]
-          ? (layerOpacity[gl.id] ?? 1)
-          : 0;
-        map.setPaintProperty(layerId, "raster-opacity", op);
+      applyGeonodeRasterOpacity(
+        map,
+        geonodeLayers,
+        visibleLayers,
+        layerOpacity
+      );
+
+      const hOp = highlightVisible ? highlightOpacity : 0;
+      if (hasLayer(map, "highlight-fill")) {
+        map.setPaintProperty(
+          "highlight-fill",
+          "fill-opacity",
+          hOp * SELECTED_MAP_FILL_OPACITY
+        );
       }
-      restackMiniMapLayers(map, geonodeLayers);
+      if (hasLayer(map, "highlight-halo")) {
+        map.setPaintProperty("highlight-halo", "line-opacity", hOp);
+      }
+      if (hasLayer(map, "highlight-line")) {
+        map.setPaintProperty("highlight-line", "line-opacity", hOp);
+      }
+
+      restackByOrder(map, layerOrder);
     };
 
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [visibleLayers, layerOpacity, geonodeLayers, mapReady]);
+    scheduleGeonodeRasterOpacity(map, geonodeLayers, visibleLayers, layerOpacity);
+  }, [
+    visibleLayers,
+    layerOpacity,
+    highlightVisible,
+    highlightOpacity,
+    layerOrder,
+    geonodeLayers,
+    mapReady,
+  ]);
 
-  function toggleLayer(id: string, on: boolean) {
+  const panelRows: FichaPlanoLayerRow[] = layerOrder.map((id) => {
+    if (id === "highlight") {
+      return {
+        id,
+        title: layerTitle(id, geonodeLayers),
+        role: "highlight",
+        visible: highlightVisible,
+        opacity: highlightOpacity,
+      };
+    }
+    const gl = geonodeLayers.find((l) => l.id === id);
+    return {
+      id,
+      title: layerTitle(id, geonodeLayers),
+      role: gl ? layerRole(gl) : "other",
+      visible: visibleLayers[id] ?? false,
+      opacity: layerOpacity[id] ?? 1,
+    };
+  });
+
+  function toggleLayer(id: FichaPlanoLayerId, on: boolean) {
+    if (id === "highlight") {
+      setHighlightVisible(on);
+      return;
+    }
     setVisibleLayers((prev) => {
       const next = { ...prev, [id]: on };
       setLayerOpacity((op) =>
@@ -235,41 +376,64 @@ export default function FichaMiniMap({
     });
   }
 
-  if (!geometry) {
+  function setOpacity(id: FichaPlanoLayerId, value: number) {
+    if (id === "highlight") {
+      setHighlightOpacity(value);
+      if (value > 0) setHighlightVisible(true);
+      return;
+    }
+    setLayerOpacity((prev) => {
+      const next = { ...prev, [id]: value };
+      return capColoniasOpacityWithPredios(visibleLayers, next, geonodeLayers);
+    });
+    if (value > 0) {
+      setVisibleLayers((prev) => ({ ...prev, [id]: true }));
+    }
+  }
+
+  function moveLayer(id: FichaPlanoLayerId, dir: -1 | 1) {
+    setLayerOrder((prev) => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const next = idx + dir;
+      if (next < 0 || next >= prev.length) return prev;
+      const copy = [...prev];
+      [copy[idx], copy[next]] = [copy[next], copy[idx]];
+      return copy;
+    });
+  }
+
+  if (!effectiveGeometry) {
     return (
       <div className="ficha-mini-map ficha-mini-map--empty">
-        <p>Sin geometría cartográfica para este predio.</p>
+        <p>
+          {geometryClave && geometryClave !== clave
+            ? "Actualizando localización cartográfica…"
+            : "Sin geometría cartográfica para este predio."}
+        </p>
       </div>
     );
   }
 
   return (
     <div className="ficha-mini-map-wrap">
-      <div
-        ref={containerRef}
-        className="ficha-mini-map"
-        aria-label="Localización cartográfica"
-      />
-      {geonodeLayers.length > 0 && (
-        <div className="ficha-mini-map-layers" aria-label="Capas WMS">
-          {geonodeLayers.map((gl) => {
-            const pct = Math.round((layerOpacity[gl.id] ?? 1) * 100);
-            return (
-              <label key={gl.id} className="ficha-mini-layer-item">
-                <input
-                  type="checkbox"
-                  checked={visibleLayers[gl.id] ?? false}
-                  onChange={(e) => toggleLayer(gl.id, e.target.checked)}
-                />
-                <span>{gl.title}</span>
-                {visibleLayers[gl.id] && (
-                  <span className="ficha-mini-layer-pct">{pct}%</span>
-                )}
-              </label>
-            );
-          })}
-        </div>
-      )}
+      <div className="ficha-mini-map-stage">
+        <div
+          ref={containerRef}
+          className={`ficha-mini-map${mapVisible ? " ficha-mini-map--ready" : " ficha-mini-map--loading"}`}
+          aria-label="Localización cartográfica"
+        />
+        <FichaMapLayersPanel
+          open={layersPanelOpen}
+          onClose={onCloseLayersPanel}
+          rows={panelRows}
+          baseMap={baseMap}
+          onBaseMapChange={setBaseMap}
+          onToggle={toggleLayer}
+          onOpacity={setOpacity}
+          onMove={moveLayer}
+        />
+      </div>
     </div>
   );
 }

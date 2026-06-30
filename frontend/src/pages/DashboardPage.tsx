@@ -68,7 +68,7 @@ import {
   buildInitialVisibility,
   capColoniasOpacityWithPredios,
 } from "../config/mapLayers";
-import type { PublicConfig } from "../types/config";
+import type { GeonodeLayer, PublicConfig } from "../types/config";
 
 const emptySearch = (): SearchFields => ({
   clave: "",
@@ -155,10 +155,12 @@ export default function DashboardPage() {
   const [mapFitNonce, setMapFitNonce] = useState(0);
   const [fichaOpen, setFichaOpen] = useState(false);
   const loadSeqRef = useRef(0);
+  const padronSelectSeqRef = useRef(0);
   const layersSyncedKeyRef = useRef("");
   const predioWmsNearRef = useRef(false);
   const visibleLayersRef = useRef(visibleLayers);
   const layerOpacityRef = useRef(layerOpacity);
+  const geonodeLayersRef = useRef<GeonodeLayer[]>([]);
 
   useEffect(() => {
     visibleLayersRef.current = visibleLayers;
@@ -243,6 +245,19 @@ export default function DashboardPage() {
         setSearchHighlights(collection);
         setFiscalThematic(true);
         setMapFitNonce((n) => n + 1);
+
+        const layers = geonodeLayersRef.current;
+        if (layers.length) {
+          predioWmsNearRef.current = true;
+          const wms = applyPrediosWmsProximity(
+            visibleLayersRef.current,
+            layerOpacityRef.current,
+            layers,
+            true
+          );
+          setVisibleLayers(wms.visible);
+          setLayerOpacity(wms.opacity);
+        }
         return collection;
       } finally {
         setMapHighlightsLoading(false);
@@ -511,6 +526,9 @@ export default function DashboardPage() {
   }
 
   async function selectPadronRecord(record: PredioAlfanumericoRecord) {
+    const selectSeq = ++padronSelectSeqRef.current;
+    const stale = () => selectSeq !== padronSelectSeqRef.current;
+
     predioWmsNearRef.current = false;
     const activeRecord = record;
     setPadron(activeRecord);
@@ -533,6 +551,7 @@ export default function DashboardPage() {
     if (record.parcel_id) {
       try {
         const linked = await getParcel(record.parcel_id);
+        if (stale()) return;
         const sameCode =
           normalizeCadastralCode(linked.cadastral_code) ===
           normalizeCadastralCode(
@@ -555,6 +574,7 @@ export default function DashboardPage() {
       const mapGeo = await getCadastralMapGeometry(
         activeRecord.clave_catastral
       ).catch(() => null);
+      if (stale()) return;
       const parcelGeom = mapGeo?.geometry
         ? null
         : await resolveParcelGeometry(activeRecord);
@@ -564,6 +584,7 @@ export default function DashboardPage() {
           : findGeometryInSearch(searchHighlights, activeRecord.clave_catastral);
 
       if (mapGeo?.geometry) {
+        if (stale()) return;
         applyHighlightGeometry(
           mapGeo.geometry,
           activeRecord.clave_catastral,
@@ -571,12 +592,14 @@ export default function DashboardPage() {
         );
         if (mapGeo.note) setSearchError(mapGeo.note);
       } else if (parcelGeom) {
+        if (stale()) return;
         applyHighlightGeometry(
           parcelGeom,
           activeRecord.clave_catastral,
           "database_parcel"
         );
       } else if (localGeom) {
+        if (stale()) return;
         applyHighlightGeometry(
           localGeom,
           activeRecord.clave_catastral,
@@ -609,7 +632,7 @@ export default function DashboardPage() {
         );
       }
     } finally {
-      setGeometryLoading(false);
+      if (!stale()) setGeometryLoading(false);
     }
   }
 
@@ -751,6 +774,10 @@ export default function DashboardPage() {
     catalogSummary?.predios_alfanumerico ?? parcels.length;
   const coverage = catalogSummary?.coverage_percent;
   const geonodeLayers = config?.geonode.layers ?? [];
+
+  useEffect(() => {
+    geonodeLayersRef.current = geonodeLayers;
+  }, [geonodeLayers]);
 
   return (
     <div className="app app-catastro">
@@ -954,6 +981,7 @@ export default function DashboardPage() {
           open={fichaOpen}
           padron={padron}
           geometry={highlightGeometry}
+          geometryClave={highlightLabel}
           geometryLoading={geometryLoading}
           dibujadoEnMapa={dibujadoEnMapa}
           currency={currency}

@@ -1,0 +1,424 @@
+/* Vista previa / impresión ficha catastral — paridad SGC maduro (41-ficha-preview.js) */
+
+.ficha-print-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  background: rgba(15, 23, 42, 0.72);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.ficha-print-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  background: #1e293b;
+  border-bottom: 2px solid #703341;
+}
+
+.ficha-print-toolbar button {
+  border: 1px solid #64748b;
+  background: #475569;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ficha-print-toolbar button:hover {
+  background: #64748b;
+}
+
+.ficha-print-btn-main {
+  background: #703341 !important;
+  border-color: #8c4455 !important;
+}
+
+.ficha-print-btn-main:hover {
+  background: #8c4455 !important;
+}
+
+.ficha-print-btn-sec.active {
+  background: #7a3a49 !important;
+  border-color: #c9a227 !important;
+}
+
+.ficha-print-paper-select select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff;
+  color: #1e293b;
+}
+
+.ficha-print-hint {
+  margin: 0;
+  padding: 8px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.85);
+  border-bottom: 1px solid #334155;
+}
+
+.ficha-print-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.ficha-print-sheet {
+  width: min(100%, 8.5in);
+  max-width: 8.5in;
+  background: #fff;
+  border: 2px solid #703341;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ficha-print-sheet.papel-carta {
+  min-height: 11in;
+}
+
+.ficha-print-sheet.papel-legal {
+  min-height: 14in;
+}
+
+.ficha-print-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background-color: #703341;
+  background: linear-gradient(90deg, #532633 0%, #703341 55%, #8c4455 100%);
+  color: #fff;
+  border-bottom: 3px solid #c9a227;
+}
+
+.ficha-print-logo {
+  height: 52px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.ficha-print-header-text h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: 0.5px;
+}
+
+.ficha-print-header-text p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  opacity: 0.92;
+}
+
+.ficha-print-header-ids {
+  text-align: right;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ficha-print-header-ids b {
+  display: block;
+  font-size: 15px;
+  margin-top: 2px;
+  text-transform: none;
+  letter-spacing: 0.5px;
+}
+
+.ficha-print-datos {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 11px;
+}
+
+.ficha-print-datos p {
+  margin: 0 0 6px;
+  line-height: 1.35;
+}
+
+.ficha-print-label {
+  font-weight: 800;
+  color: #703341;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.ficha-print-nombre {
+  color: #703341;
+  text-decoration: underline;
+  text-transform: uppercase;
+}
+
+.ficha-print-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid #d8bdc5;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.ficha-print-grid > div {
+  border-right: 1px solid #efe6e8;
+  border-bottom: 1px solid #efe6e8;
+  padding: 5px 8px;
+  min-height: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ficha-print-grid > div:nth-child(4n) {
+  border-right: none;
+}
+
+.ficha-print-grid-full {
+  grid-column: 1 / -1;
+  border-right: none !important;
+}
+
+.ficha-print-grid-label {
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #1e293b;
+  letter-spacing: 0.3px;
+}
+
+.ficha-print-grid > div > span:last-child {
+  font-size: 10px;
+  font-weight: 800;
+  color: #703341;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.ficha-print-media {
+  margin: 6px 8px;
+  border: 1px solid #d8bdc5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ficha-print-media-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  background: #703341;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ficha-print-media-tools {
+  display: flex;
+  gap: 4px;
+}
+
+.ficha-print-media-tools button {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ficha-print-media-body {
+  background: #1a1a1a;
+  height: var(--ficha-media-street, 2.55in);
+  position: relative;
+  overflow: hidden;
+}
+
+.ficha-print-map-section .ficha-print-media-body {
+  height: var(--ficha-media-map, 3.05in);
+  min-height: 280px;
+}
+
+.ficha-print-map-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+}
+
+.ficha-print-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ficha-print-map.ficha-print-map--ready {
+  opacity: 1;
+}
+
+.ficha-print-map-snapshot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  display: none;
+}
+
+.ficha-print-map-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 16px;
+  text-align: center;
+}
+
+.ficha-print-street-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+body.ficha-print-preview-open .ficha-overlay {
+  pointer-events: none;
+}
+
+body.ficha-print-preview-open .ficha-workspace {
+  visibility: hidden;
+}
+
+.ficha-print-map-wrap .ficha-capas-panel {
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+}
+
+.ficha-print-footer {
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  color: #64748b;
+  border-top: 1px solid #e2e8f0;
+}
+
+@media print {
+  body.ficha-printing-active * {
+    visibility: hidden;
+  }
+
+  body.ficha-printing-active .ficha-print-overlay,
+  body.ficha-printing-active .ficha-print-overlay * {
+    visibility: visible;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.ficha-printing-active .ficha-print-overlay {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    z-index: 99999;
+  }
+
+  body.ficha-printing-active .ficha-print-header {
+    background-color: #703341 !important;
+    background-image: linear-gradient(
+      90deg,
+      #532633 0%,
+      #703341 55%,
+      #8c4455 100%
+    ) !important;
+    color: #fff !important;
+    border-bottom-color: #c9a227 !important;
+  }
+
+  body.ficha-printing-active .ficha-print-media-head {
+    background-color: #703341 !important;
+    color: #fff !important;
+  }
+
+  body.ficha-printing-active .ficha-print-sheet {
+    border-color: #703341 !important;
+  }
+
+  body.ficha-printing-active .ficha-print-label,
+  body.ficha-printing-active .ficha-print-nombre,
+  body.ficha-printing-active .ficha-print-grid > div > span:last-child {
+    color: #703341 !important;
+  }
+
+  body.ficha-printing-active .ficha-print-grid {
+    border-color: #d8bdc5 !important;
+  }
+
+  body.ficha-printing-active .ficha-print-media {
+    border-color: #d8bdc5 !important;
+  }
+
+  body.ficha-printing-active .no-print {
+    display: none !important;
+  }
+
+  body.ficha-printing-active .ficha-print-map-snapshot {
+    display: block !important;
+  }
+
+  body.ficha-printing-active .ficha-print-map,
+  body.ficha-printing-active .ficha-print-map .maplibregl-canvas {
+    visibility: hidden !important;
+  }
+
+  body.ficha-printing-active .ficha-print-scroll {
+    padding: 0;
+    overflow: visible;
+  }
+
+  body.ficha-printing-active .ficha-print-sheet {
+    box-shadow: none;
+    border-radius: 0;
+    width: 8.5in;
+    max-width: 8.5in;
+  }
+
+  @page {
+    size: 8.5in 11in portrait;
+    margin: 4mm;
+  }
+}
