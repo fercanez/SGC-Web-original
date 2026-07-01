@@ -14,7 +14,9 @@ import {
 } from "../utils/fiscal";
 import FichaMiniMap from "./FichaMiniMap";
 import FichaPrintPreview from "./FichaPrintPreview";
-import type { GeonodeLayer } from "../types/config";
+import FichaConstruccionTab from "./FichaConstruccionTab";
+import type { GeonodeLayer, PublicConfig } from "../types/config";
+import { mergeConstruccionLayer } from "../utils/mapSnap";
 import "../styles/ficha-catastral.css";
 
 export type FichaCatastralTab =
@@ -50,6 +52,7 @@ interface Props {
   currency: string;
   geonodeLayers?: GeonodeLayer[];
   wmsPath?: string;
+  construccionesConfig?: PublicConfig["construcciones"];
   searchResults?: PredioAlfanumericoRecord[];
   onNavigate?: (record: PredioAlfanumericoRecord) => void;
   onClose: () => void;
@@ -308,10 +311,16 @@ export default function FichaCatastralModal({
   currency,
   geonodeLayers = [],
   wmsPath = "/api/v1/geonode/wms",
+  construccionesConfig,
   searchResults = [],
   onNavigate,
   onClose,
 }: Props) {
+  const fichaGeonodeLayers = useMemo(
+    () => mergeConstruccionLayer(geonodeLayers, construccionesConfig),
+    [geonodeLayers, construccionesConfig]
+  );
+
   const [tab, setTab] = useState<FichaCatastralTab>("datos");
   const [propietarios, setPropietarios] = useState<PredioPropietarioItem[]>([]);
   const [propietariosTotal, setPropietariosTotal] = useState(0);
@@ -476,13 +485,20 @@ export default function FichaCatastralModal({
               propietariosTotal={propietariosTotal}
               folioReal={folioReal}
               folioRealLoading={folioRealLoading}
-              geonodeLayers={geonodeLayers}
+              geonodeLayers={fichaGeonodeLayers}
               wmsPath={wmsPath}
               onOpenPrint={() => setPrintPreviewOpen(true)}
             />
           )}
           {tab === "construccion" && (
-            <TabPlaceholder title="Construcción y medición" />
+            <FichaConstruccionTab
+              padron={padron}
+              geometry={geometry}
+              geometryClave={geometryClave}
+              geometryLoading={geometryLoading}
+              geonodeLayers={fichaGeonodeLayers}
+              wmsPath={wmsPath}
+            />
           )}
           {tab === "archivo" && <TabPlaceholder title="Archivo digital" />}
           {tab === "control-urbano" && (
@@ -503,7 +519,7 @@ export default function FichaCatastralModal({
         geometryClave={geometryClave}
         folioReal={folioReal}
         currency={currency}
-        geonodeLayers={geonodeLayers}
+        geonodeLayers={fichaGeonodeLayers}
         wmsPath={wmsPath}
         onClose={() => setPrintPreviewOpen(false)}
       />

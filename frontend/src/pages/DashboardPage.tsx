@@ -987,6 +987,7 @@ export default function DashboardPage() {
           currency={currency}
           geonodeLayers={geonodeLayers}
           wmsPath={config?.geonode.wms_proxy_path ?? "/api/v1/geonode/wms"}
+          construccionesConfig={config?.construcciones}
           searchResults={searchResults}
           onNavigate={selectPadronRecord}
           onClose={() => setFichaOpen(false)}

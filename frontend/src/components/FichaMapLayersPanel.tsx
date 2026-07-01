@@ -7,7 +7,11 @@ import {
 import type { GeonodeLayer } from "../types/config";
 import { BASE_MAP_OPTIONS } from "../map/wms";
 
-export type FichaPlanoLayerId = "highlight" | string;
+export type FichaPlanoLayerId =
+  | "highlight"
+  | "measure-free"
+  | "construcciones-vector"
+  | string;
 
 export interface FichaPlanoLayerRow {
   id: FichaPlanoLayerId;
@@ -140,10 +144,29 @@ export function buildFichaLayerOrder(layers: GeonodeLayer[]): FichaPlanoLayerId[
   return ["highlight", ...wms];
 }
 
+export function buildFichaConstruccionLayerOrder(
+  layers: GeonodeLayer[]
+): FichaPlanoLayerId[] {
+  const wms = [...layers]
+    .sort((a, b) => {
+      const rank = (r: ReturnType<typeof layerRole>) => {
+        if (r === "predios") return 0;
+        if (r === "construcciones") return 1;
+        if (r === "colonias") return 2;
+        return 3;
+      };
+      return rank(layerRole(a)) - rank(layerRole(b));
+    })
+    .map((l) => l.id);
+  return ["highlight", ...wms, "construcciones-vector", "measure-free"];
+}
+
 export function layerTitle(
   id: FichaPlanoLayerId,
   layers: GeonodeLayer[]
 ): string {
   if (id === "highlight") return "Predio consultado";
+  if (id === "measure-free") return "Medición libre";
+  if (id === "construcciones-vector") return "Construcciones (vector)";
   return layers.find((l) => l.id === id)?.title ?? id;
 }

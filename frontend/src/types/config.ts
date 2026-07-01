@@ -46,4 +46,10 @@ export interface PublicConfig {
     sync_path: string;
     info_path: string;
   };
+  construcciones?: {
+    enabled: boolean;
+    layer: string | null;
+    title: string;
+    wms_id: string | null;
+  };
 }

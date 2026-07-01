@@ -1,0 +1,327 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  getPredioConstrucciones,
+  postCuadroConstruccion,
+  type ConstruccionCartograficaItem,
+  type CuadroConstruccionResponse,
+  type PredioAlfanumericoRecord,
+} from "../api";
+import type { GeonodeLayer } from "../types/config";
+import type { MeasureMode } from "../utils/mapSnap";
+import FichaConstruccionMap from "./FichaConstruccionMap";
+
+interface Props {
+  padron: PredioAlfanumericoRecord;
+  geometry: GeoJSON.Geometry | null;
+  geometryClave?: string | null;
+  geometryLoading?: boolean;
+  geonodeLayers: GeonodeLayer[];
+  wmsPath: string;
+}
+
+function fmtNum(value: number | null | undefined, digits = 2, suffix = "") {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${value.toFixed(digits)}${suffix}`;
+}
+
+function val(value: string | number | null | undefined, fallback = "—") {
+  if (value == null || value === "") return fallback;
+  return String(value);
+}
+
+export default function FichaConstruccionTab({
+  padron,
+  geometry,
+  geometryClave,
+  geometryLoading = false,
+  geonodeLayers,
+  wmsPath,
+}: Props) {
+  const clave = padron.clave_catastral;
+  const [cuadro, setCuadro] = useState<CuadroConstruccionResponse | null>(null);
+  const [cuadroLoading, setCuadroLoading] = useState(false);
+  const [cuadroError, setCuadroError] = useState<string | null>(null);
+  const [construcciones, setConstrucciones] = useState<ConstruccionCartograficaItem[]>([]);
+  const [constrLoading, setConstrLoading] = useState(false);
+  const [constrError, setConstrError] = useState<string | null>(null);
+  const [constrMessage, setConstrMessage] = useState<string | null>(null);
+
+  const [measureEnabled, setMeasureEnabled] = useState(true);
+  const [measureMode, setMeasureMode] = useState<MeasureMode>("polygon");
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [measureHidden, setMeasureHidden] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState<GeoJSON.Position[]>([]);
+  const [layersPanelOpen, setLayersPanelOpen] = useState(false);
+
+  const geometryReady =
+    geometry &&
+    (!geometryClave || geometryClave === clave);
+
+  useEffect(() => {
+    if (!geometryReady) {
+      setCuadro(null);
+      setCuadroError(null);
+      return;
+    }
+    let cancelled = false;
+    setCuadroLoading(true);
+    setCuadroError(null);
+    postCuadroConstruccion(geometry)
+      .then((data) => {
+        if (!cancelled) setCuadro(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setCuadroError(err.message || "Error al calcular cuadro UTM");
+      })
+      .finally(() => {
+        if (!cancelled) setCuadroLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [geometry, geometryReady, clave]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setConstrLoading(true);
+    setConstrError(null);
+    setConstrMessage(null);
+    getPredioConstrucciones(clave)
+      .then((data) => {
+        if (cancelled) return;
+        setConstrucciones(data.items ?? []);
+        setConstrMessage(data.message ?? null);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setConstrError(err.message || "Error al consultar construcciones");
+      })
+      .finally(() => {
+        if (!cancelled) setConstrLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clave]);
+
+  useEffect(() => {
+    setMeasurePoints([]);
+    setMeasureHidden(false);
+  }, [clave]);
+
+  const construccionRegistrada = useMemo(() => {
+    if (construcciones.length > 0) return "SI";
+    if (padron.sup_const != null && Number(padron.sup_const) > 0) return "SI";
+    return "NO";
+  }, [construcciones.length, padron.sup_const]);
+
+  const supPadron = padron.sup_const != null ? Number(padron.sup_const) : null;
+
+  return (
+    <div className="ficha-construccion-layout">
+      <section className="ficha-construccion-col ficha-construccion-tablas">
+        <div className="ficha-construccion-resumen">
+          <div className="ficha-construccion-metric">
+            <span>Sup. documental</span>
+            <strong>{fmtNum(padron.sup_documental != null ? Number(padron.sup_documental) : null, 2, " m²")}</strong>
+          </div>
+          <div className="ficha-construccion-metric">
+            <span>Sup. construcción (padrón)</span>
+            <strong>{fmtNum(supPadron, 2, " m²")}</strong>
+          </div>
+          <div className="ficha-construccion-metric">
+            <span>Área UTM calculada</span>
+            <strong>
+              {cuadroLoading ? "…" : fmtNum(cuadro?.area_m2, 2, " m²")}
+            </strong>
+          </div>
+          <div className="ficha-construccion-metric">
+            <span>Perímetro UTM</span>
+            <strong>
+              {cuadroLoading ? "…" : fmtNum(cuadro?.perimetro_m, 2, " m")}
+            </strong>
+          </div>
+          <div className="ficha-construccion-metric">
+            <span>Construcción registrada</span>
+            <strong>{construccionRegistrada}</strong>
+          </div>
+        </div>
+
+        <h3 className="ficha-panel-title">
+          Cuadro de construcción — {clave}
+        </h3>
+        {cuadroError && <p className="ficha-error">{cuadroError}</p>}
+        {geometryLoading && (
+          <p className="ficha-muted">Cargando geometría del predio…</p>
+        )}
+        {!geometryLoading && !geometryReady && (
+          <p className="ficha-muted">Sin geometría para generar el cuadro UTM.</p>
+        )}
+        {geometryReady && !cuadroLoading && cuadro && cuadro.vertices.length === 0 && (
+          <p className="ficha-muted">No se pudo generar el cuadro de vértices.</p>
+        )}
+        {cuadro && cuadro.vertices.length > 0 && (
+          <div className="ficha-construccion-scroll">
+            <table className="ficha-construccion-table">
+              <thead>
+                <tr>
+                  <th>Vértice</th>
+                  <th>Lado</th>
+                  <th>Dist. (m)</th>
+                  <th>Ángulo</th>
+                  <th>Este</th>
+                  <th>Norte</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cuadro.vertices.map((v) => (
+                  <tr key={v.vertice}>
+                    <td>{v.vertice}</td>
+                    <td>{v.lado}</td>
+                    <td>{fmtNum(v.dist_m, 2)}</td>
+                    <td>{fmtNum(v.angulo_deg, 2)}</td>
+                    <td>{fmtNum(v.este, 3)}</td>
+                    <td>{fmtNum(v.norte, 3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="ficha-construccion-foot">
+              EPSG:{cuadro.srid} (UTM) · Área {fmtNum(cuadro.area_m2, 2, " m²")} · Perímetro{" "}
+              {fmtNum(cuadro.perimetro_m, 2, " m")}
+            </p>
+          </div>
+        )}
+
+        <h3 className="ficha-panel-title ficha-construccion-subtitle">
+          Construcciones de la clave (capa cartográfica)
+          {!constrLoading && ` — ${construcciones.length} registro(s)`}
+        </h3>
+        {constrLoading && <p className="ficha-muted">Consultando capa WMS/WFS…</p>}
+        {constrError && <p className="ficha-error">{constrError}</p>}
+        {!constrLoading && !constrError && constrMessage && construcciones.length === 0 && (
+          <p className="ficha-muted">{constrMessage}</p>
+        )}
+        {!constrLoading && construcciones.length > 0 && (
+          <div className="ficha-construccion-scroll">
+            <table className="ficha-construccion-table">
+              <thead>
+                <tr>
+                  <th>Clave const.</th>
+                  <th>Niveles</th>
+                  <th>Sup. inc. (m²)</th>
+                  <th>Tipo</th>
+                  <th>Perímetro (m)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {construcciones.map((c, idx) => (
+                  <tr key={`${c.clave_const ?? idx}-${idx}`}>
+                    <td>{val(c.clave_const)}</td>
+                    <td>{val(c.niveles)}</td>
+                    <td>{fmtNum(c.sup_inc_m2, 3)}</td>
+                    <td>{val(c.tipo)}</td>
+                    <td>{fmtNum(c.perimetro_m, 4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="ficha-construccion-col ficha-construccion-map-col">
+        <div className="ficha-map-toolbar">
+          <h3 className="ficha-panel-title">Medición cartográfica</h3>
+          <div className="ficha-map-actions">
+            <label className="ficha-construccion-check">
+              <input
+                type="checkbox"
+                checked={measureEnabled}
+                onChange={(e) => setMeasureEnabled(e.target.checked)}
+              />
+              Medición
+            </label>
+            <button
+              type="button"
+              className={`ficha-btn-secondary ficha-btn-capas${layersPanelOpen ? " active" : ""}`}
+              onClick={() => setLayersPanelOpen((v) => !v)}
+            >
+              Capas
+            </button>
+          </div>
+        </div>
+
+        {measureEnabled && (
+          <div className="ficha-medicion-toolbar">
+            <label className="ficha-construccion-check">
+              <input
+                type="checkbox"
+                checked={snapEnabled}
+                onChange={(e) => setSnapEnabled(e.target.checked)}
+              />
+              Snap a predios/vértices
+            </label>
+            <div className="ficha-medicion-modes">
+              <button
+                type="button"
+                className={measureMode === "line" ? "active" : ""}
+                onClick={() => setMeasureMode("line")}
+              >
+                Línea
+              </button>
+              <button
+                type="button"
+                className={measureMode === "polygon" ? "active" : ""}
+                onClick={() => setMeasureMode("polygon")}
+              >
+                Polígono
+              </button>
+            </div>
+            <div className="ficha-medicion-actions">
+              <button
+                type="button"
+                disabled={measurePoints.length === 0}
+                onClick={() => setMeasurePoints((pts) => pts.slice(0, -1))}
+              >
+                Deshacer punto
+              </button>
+              <button type="button" onClick={() => setMeasureHidden((v) => !v)}>
+                {measureHidden ? "Mostrar medición" : "Ocultar medición"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMeasurePoints([]);
+                  setMeasureHidden(false);
+                }}
+              >
+                Quitar medición
+              </button>
+            </div>
+          </div>
+        )}
+
+        {geometryLoading ? (
+          <div className="ficha-media-placeholder">Cargando mapa…</div>
+        ) : (
+          <FichaConstruccionMap
+            clave={clave}
+            geometry={geometry}
+            geometryClave={geometryClave}
+            geonodeLayers={geonodeLayers}
+            wmsPath={wmsPath}
+            construccionItems={construcciones}
+            measureEnabled={measureEnabled}
+            measureMode={measureEnabled ? measureMode : "off"}
+            snapEnabled={snapEnabled}
+            measureHidden={measureHidden}
+            measurePoints={measurePoints}
+            onMeasurePointsChange={setMeasurePoints}
+            layersPanelOpen={layersPanelOpen}
+            onCloseLayersPanel={() => setLayersPanelOpen(false)}
+          />
+        )}
+      </section>
+    </div>
+  );
+}

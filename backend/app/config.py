@@ -98,6 +98,18 @@ class Settings(BaseSettings):
     )
     geonode_field_valor: str = "valor2026,valor_catastral,avaluo,valor"
 
+    # Capa WFS/WMS de construcciones (ficha Construcción)
+    geonode_construcciones_layer: str = "geonode:construcciones_mexicali"
+    geonode_construcciones_title: str = "Construcciones WMS"
+    geonode_field_construcc_padre: str = "clavecatas,clave_catastral,cve_cat,cuenta_pred"
+    geonode_field_construcc_num: str = "claveconst,clave_const,no_const,num_const,const"
+    geonode_field_construcc_niveles: str = "niveles,nivel,num_niveles"
+    geonode_field_construcc_sup: str = (
+        "sup_inc,superficie,area,sup_construccion,area_m2,sup_inc_m2"
+    )
+    geonode_field_construcc_tipo: str = "tipo,tipo_const,descripcion,uso,destino"
+    geonode_field_construcc_perimetro: str = "perimetro,perimetro_m,perim"
+
     # Columnas del Excel/CSV (primera coincidencia gana, separadas por coma)
     excel_col_cadastral: str = (
         "clavecatas,clave_catastral,clave catastral,cve_cat,cadastral_code"

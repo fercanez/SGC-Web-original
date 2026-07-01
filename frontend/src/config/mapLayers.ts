@@ -3,6 +3,7 @@ import type { GeonodeLayer } from "../types/config";
 export type LayerRole =
   | "colonias"
   | "predios"
+  | "construcciones"
   | "codigos"
   | "limite"
   | "fiscal"
@@ -13,6 +14,7 @@ const ROLE_ORDER: LayerRole[] = [
   "colonias",
   "codigos",
   "predios",
+  "construcciones",
   "limite",
   "fiscal",
   "other",
@@ -23,6 +25,7 @@ export function layerRole(layer: GeonodeLayer): LayerRole {
   const key = `${layer.id} ${layer.layer} ${layer.title}`.toLowerCase();
   if (key.includes("codigo") || key.includes("postal")) return "codigos";
   if (key.includes("predio")) return "predios";
+  if (key.includes("construcc")) return "construcciones";
   if (key.includes("colonia")) return "colonias";
   if (key.includes("limite") || key.includes("municipal")) return "limite";
   if (key.includes("fiscal") || key.includes("adeudo")) return "fiscal";
@@ -43,6 +46,8 @@ export function defaultLayerOpacity(role: LayerRole): number {
       return COLONIAS_MAX_OPACITY_WITH_PREDIOS;
     case "predios":
       return 1;
+    case "construcciones":
+      return 0.85;
     case "codigos":
       return 1;
     case "limite":
@@ -91,6 +96,10 @@ export function wmsStackIds(layers: GeonodeLayer[]): string[] {
 /** Zoom mínimo para encender predios WMS al consultar un predio. */
 export const PREDIOS_WMS_NEAR_ZOOM = 16;
 export const PREDIOS_WMS_NEAR_OPACITY = 0.75;
+
+export function construccionesLayerIds(layers: GeonodeLayer[]): string[] {
+  return layers.filter((l) => layerRole(l) === "construcciones").map((l) => l.id);
+}
 
 export function prediosLayerIds(layers: GeonodeLayer[]): string[] {
   return layers.filter((l) => layerRole(l) === "predios").map((l) => l.id);
@@ -231,6 +240,8 @@ export function layerAccentClass(role: LayerRole): string {
       return "cm-layer-accent-colonias";
     case "predios":
       return "cm-layer-accent-predios";
+    case "construcciones":
+      return "cm-layer-accent-construcciones";
     case "codigos":
       return "cm-layer-accent-codigos";
     case "fiscal":

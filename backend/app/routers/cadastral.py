@@ -11,7 +11,12 @@ from app.models import Parcel, PredioAlfanumerico
 from app.schemas import (
     BatchMapGeometriesRequest,
     BatchMapGeometriesResponse,
+    CuadroConstruccionRequest,
     PredioAlfanumericoRead,
+)
+from app.services.construcciones_service import (
+    build_cuadro_construccion_utm,
+    fetch_construcciones_by_clave,
 )
 from app.services.cadastral_alfanumerico import (
     link_all_records,
@@ -267,6 +272,25 @@ def link_cadastral_to_parcels(
     stats = link_all_records(db, sync_summary=True)
     db.commit()
     return stats
+
+
+@router.post("/cuadro-construccion")
+def cuadro_construccion(
+    body: CuadroConstruccionRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("cadastral.read")),
+):
+    """Cuadro de vértices UTM (distancias, ángulos, este/norte) del contorno del predio."""
+    return build_cuadro_construccion_utm(db, body.geometry)
+
+
+@router.get("/{clave}/construcciones")
+async def construcciones_predio(
+    clave: str,
+    _=Depends(require_permission("cadastral.read")),
+):
+    """Construcciones de la clave desde capa WFS GeoServer."""
+    return await fetch_construcciones_by_clave(clave)
 
 
 @router.get("/{clave}/folio-real")

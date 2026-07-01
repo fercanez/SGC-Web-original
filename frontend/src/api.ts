@@ -125,6 +125,56 @@ export function getPredioFolioReal(
   );
 }
 
+export interface CuadroConstruccionVertex {
+  vertice: string;
+  lado: string;
+  dist_m: number;
+  angulo_deg: number;
+  este: number;
+  norte: number;
+}
+
+export interface CuadroConstruccionResponse {
+  srid: number;
+  area_m2: number | null;
+  perimetro_m: number | null;
+  vertices: CuadroConstruccionVertex[];
+}
+
+export function postCuadroConstruccion(
+  geometry: GeoJSON.Geometry
+): Promise<CuadroConstruccionResponse> {
+  return fetchJson("/api/v1/cadastral/cuadro-construccion", {
+    method: "POST",
+    body: JSON.stringify({ geometry }),
+  });
+}
+
+export interface ConstruccionCartograficaItem {
+  clave_const: string | number | null;
+  niveles: string | number | null;
+  sup_inc_m2: number | null;
+  tipo: string | null;
+  perimetro_m: number | null;
+  geometry: GeoJSON.Geometry | null;
+}
+
+export interface PredioConstruccionesResponse {
+  clave_catastral: string;
+  layer: string | null;
+  field_used?: string;
+  items: ConstruccionCartograficaItem[];
+  message?: string;
+}
+
+export function getPredioConstrucciones(
+  clave: string
+): Promise<PredioConstruccionesResponse> {
+  return fetchJson(
+    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}/construcciones`
+  );
+}
+
 export interface PredioAlfanumericoRecord {
   id: string;
   parcel_id: string | null;

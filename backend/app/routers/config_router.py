@@ -53,6 +53,16 @@ def public_config():
             "sync_path": "/api/v1/source/sync",
             "info_path": "/api/v1/source/info",
         },
+        "construcciones": {
+            "enabled": bool(
+                settings.geonode_url and settings.geonode_construcciones_layer.strip()
+            ),
+            "layer": settings.geonode_construcciones_layer.strip() or None,
+            "title": settings.geonode_construcciones_title,
+            "wms_id": settings.geonode_construcciones_layer.replace(":", "_")
+            if settings.geonode_construcciones_layer
+            else None,
+        },
         "locale": {
             "language": "es-MX",
             "currency": "MXN",

@@ -111,6 +111,10 @@ class BatchMapGeometriesResponse(BaseModel):
     max_items: int
 
 
+class CuadroConstruccionRequest(BaseModel):
+    geometry: dict[str, Any]
+
+
 class PredioAlfanumericoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

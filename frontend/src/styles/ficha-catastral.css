@@ -637,3 +637,231 @@
   color: #b91c1c;
   font-size: 13px;
 }
+
+/* Pestaña Construcción */
+
+.ficha-construccion-layout {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.95fr) minmax(380px, 1.05fr);
+  gap: 12px;
+  align-items: stretch;
+  min-height: min(560px, calc(100vh - 220px));
+}
+
+@media (max-width: 1200px) {
+  .ficha-construccion-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ficha-construccion-col {
+  background: #fff;
+  border: 1px solid #d7dde5;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ficha-construccion-tablas {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+
+.ficha-construccion-map-col {
+  min-height: 420px;
+}
+
+.ficha-construccion-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ficha-construccion-metric {
+  border: 1px solid #dcc9d0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff8fa;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ficha-construccion-metric span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.25px;
+}
+
+.ficha-construccion-metric strong {
+  font-size: 13px;
+  color: #111827;
+}
+
+.ficha-construccion-subtitle {
+  margin-top: 16px;
+}
+
+.ficha-construccion-scroll {
+  overflow: auto;
+  max-height: 240px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.ficha-construccion-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.ficha-construccion-table th,
+.ficha-construccion-table td {
+  border: 1px solid #d1d5db;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ficha-construccion-table thead th {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #ede0e4 0%, #dcc9d0 100%);
+  color: #5c2834;
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 800;
+  z-index: 1;
+}
+
+.ficha-construccion-foot {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ficha-construccion-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+}
+
+.ficha-construccion-check input {
+  accent-color: #7a3a49;
+}
+
+.ficha-medicion-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.ficha-medicion-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.ficha-medicion-modes button,
+.ficha-medicion-actions button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #374151;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ficha-medicion-modes button.active {
+  background: #7a3a49;
+  color: #fff;
+  border-color: #7a3a49;
+}
+
+.ficha-medicion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ficha-medicion-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ficha-construccion-map-wrap .ficha-mini-map-stage {
+  min-height: 360px;
+}
+
+.ficha-construccion-map {
+  min-height: 360px;
+}
+
+.ficha-construccion-map--measuring {
+  cursor: crosshair;
+}
+
+.ficha-medicion-panel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  max-width: 180px;
+}
+
+.ficha-medicion-panel strong {
+  display: block;
+  color: #7a3a49;
+  text-transform: uppercase;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.ficha-medicion-hint {
+  margin: 0;
+  color: #6b7280;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.ficha-construccion-coords {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #374151;
+  pointer-events: none;
+  white-space: nowrap;
+}

@@ -1605,6 +1605,10 @@ body {
   background: #e67e22;
 }
 
+.cm-layer-accent-construcciones {
+  background: #ea580c;
+}
+
 .cm-layer-opacity {
   display: flex;
   align-items: center;
