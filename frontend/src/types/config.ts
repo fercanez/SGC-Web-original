@@ -51,5 +51,7 @@ export interface PublicConfig {
     layer: string | null;
     title: string;
     wms_id: string | null;
+    wfs_path?: string | null;
+    base_url?: string | null;
   };
 }

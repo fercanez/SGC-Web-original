@@ -498,6 +498,8 @@ export default function FichaCatastralModal({
               geometryLoading={geometryLoading}
               geonodeLayers={fichaGeonodeLayers}
               wmsPath={wmsPath}
+              construccionesConfig={construccionesConfig}
+              currency={currency}
             />
           )}
           {tab === "archivo" && <TabPlaceholder title="Archivo digital" />}

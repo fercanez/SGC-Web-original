@@ -157,16 +157,17 @@ async def fetch_wfs(
     *,
     timeout: float = 120.0,
     layer: str | None = None,
+    auth: bool = True,
 ) -> httpx.Response:
     url = build_wfs_url(params, layer=layer)
-    auth = httpx_auth()
+    httpx_auth_obj = httpx_auth() if auth else None
     async with httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=True,
         verify=settings.geonode_ssl_verify,
     ) as client:
-        resp = await client.get(url, auth=auth)
-    if resp.status_code in (401, 403):
+        resp = await client.get(url, auth=httpx_auth_obj)
+    if auth and resp.status_code in (401, 403):
         raise PermissionError(
             "GeoServer WFS rechazó las credenciales (401/403). "
             "Revise GEONODE_USER, GEONODE_PASSWORD o GEONODE_AUTH_KEY en el .env del servidor."

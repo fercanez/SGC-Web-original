@@ -4,14 +4,19 @@ import {
   type ConstruccionCartograficaItem,
   type PredioAlfanumericoRecord,
 } from "../api";
-import type { GeonodeLayer } from "../types/config";
+import type { GeonodeLayer, PublicConfig } from "../types/config";
 import {
   buildCuadroConstruccionUtm,
   type CuadroConstruccionResult,
   type CuadroVertex,
 } from "../utils/cuadroConstruccion";
+import {
+  fetchConstruccionesWfsMaduro,
+  sanitizeConstruccionesMessage,
+} from "../utils/construccionesWfs";
 import type { MeasureMode } from "../utils/mapSnap";
 import FichaConstruccionMap from "./FichaConstruccionMap";
+import FichaCartografiaPrintPreview from "./FichaCartografiaPrintPreview";
 
 interface Props {
   padron: PredioAlfanumericoRecord;
@@ -20,6 +25,8 @@ interface Props {
   geometryLoading?: boolean;
   geonodeLayers: GeonodeLayer[];
   wmsPath: string;
+  construccionesConfig?: PublicConfig["construcciones"];
+  currency: string;
 }
 
 function fmtNum(value: number | null | undefined, digits = 2, suffix = "") {
@@ -39,8 +46,11 @@ export default function FichaConstruccionTab({
   geometryLoading = false,
   geonodeLayers,
   wmsPath,
+  construccionesConfig,
+  currency,
 }: Props) {
   const clave = padron.clave_catastral;
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [cuadro, setCuadro] = useState<CuadroConstruccionResult | null>(null);
   const [cuadroLoading, setCuadroLoading] = useState(false);
   const [cuadroError, setCuadroError] = useState<string | null>(null);
@@ -85,25 +95,59 @@ export default function FichaConstruccionTab({
 
   useEffect(() => {
     let cancelled = false;
-    setConstrLoading(true);
-    setConstrError(null);
-    setConstrMessage(null);
-    getPredioConstrucciones(clave)
-      .then((data) => {
-        if (cancelled) return;
-        setConstrucciones(data.items ?? []);
-        setConstrMessage(data.message ?? null);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setConstrError(err.message || "Error al consultar construcciones");
-      })
-      .finally(() => {
-        if (!cancelled) setConstrLoading(false);
-      });
+
+    async function loadConstrucciones() {
+      setConstrLoading(true);
+      setConstrError(null);
+      setConstrMessage(null);
+
+      let items: ConstruccionCartograficaItem[] = [];
+      let message: string | null = null;
+
+      try {
+        items = await fetchConstruccionesWfsMaduro(
+          clave,
+          construccionesConfig,
+          geonodeLayers
+        );
+      } catch {
+        /* WFS directo opcional */
+      }
+
+      if (items.length === 0) {
+        try {
+          const data = await getPredioConstrucciones(clave);
+          if (cancelled) return;
+          items = data.items ?? [];
+          message = sanitizeConstruccionesMessage(data.message ?? null);
+        } catch (err) {
+          if (!cancelled) {
+            const raw =
+              err instanceof Error ? err.message : "Error al consultar construcciones";
+            setConstrError(sanitizeConstruccionesMessage(raw) ?? raw);
+          }
+          return;
+        }
+      }
+
+      if (!cancelled) {
+        setConstrucciones(items);
+        setConstrMessage(
+          items.length === 0
+            ? message ?? "Sin construcciones en la capa WFS para esta clave."
+            : null
+        );
+      }
+    }
+
+    void loadConstrucciones().finally(() => {
+      if (!cancelled) setConstrLoading(false);
+    });
+
     return () => {
       cancelled = true;
     };
-  }, [clave]);
+  }, [clave, construccionesConfig, geonodeLayers]);
 
   useEffect(() => {
     setMeasurePoints([]);
@@ -250,6 +294,13 @@ export default function FichaConstruccionTab({
             >
               Capas
             </button>
+            <button
+              type="button"
+              className="ficha-btn-secondary"
+              onClick={() => setPrintPreviewOpen(true)}
+            >
+              Imprimir / PDF
+            </button>
           </div>
         </div>
 
@@ -324,6 +375,23 @@ export default function FichaConstruccionTab({
           />
         )}
       </section>
+
+      <FichaCartografiaPrintPreview
+        open={printPreviewOpen}
+        padron={padron}
+        geometry={geometry}
+        geometryClave={geometryClave}
+        cuadro={cuadro}
+        construcciones={construcciones}
+        geonodeLayers={geonodeLayers}
+        wmsPath={wmsPath}
+        currency={currency}
+        construccionesConfig={construccionesConfig}
+        measurePoints={measurePoints}
+        measureMode={measureEnabled ? measureMode : "off"}
+        measureHidden={measureHidden}
+        onClose={() => setPrintPreviewOpen(false)}
+      />
     </div>
   );
 }

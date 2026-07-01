@@ -62,6 +62,10 @@ def public_config():
             "wms_id": settings.geonode_construcciones_layer.replace(":", "_")
             if settings.geonode_construcciones_layer
             else None,
+            "wfs_path": "/geoserver/geonode/wfs"
+            if settings.geonode_url
+            else None,
+            "base_url": settings.geonode_url or None,
         },
         "locale": {
             "language": "es-MX",

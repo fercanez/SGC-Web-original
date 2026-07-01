@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     # Capa WFS/WMS de construcciones (ficha Construcción)
     geonode_construcciones_layer: str = "geonode:construccionesmxli"
     geonode_construcciones_title: str = "Construcciones WMS"
-    geonode_field_construcc_padre: str = "clavecatas,claveorig,clave_catastral,cve_cat,cuenta_pred"
+    geonode_field_construcc_padre: str = "clavecatas,claveorig"
     geonode_field_construcc_geom: str = "the_geom,geom,geometry"
     geonode_field_construcc_num: str = "claveconst,clave_const,no_const,num_const,const"
     geonode_field_construcc_niveles: str = "niveles,nivel,num_niveles"

@@ -38,6 +38,14 @@
   background: #64748b;
 }
 
+.ficha-print-toolbar-info {
+  margin-right: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.3px;
+}
+
 .ficha-print-btn-main {
   background: #703341 !important;
   border-color: #8c4455 !important;
@@ -338,6 +346,171 @@ body.ficha-print-preview-open .ficha-workspace {
   border-top: 1px solid #e2e8f0;
 }
 
+.ficha-print-sheet.ficha-carto-sheet {
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ficha cartográfica (pestaña Construcción) — Oficio 8.5×14 */
+.ficha-carto-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 8.5in);
+  max-width: 8.5in;
+  min-height: 14in;
+  max-height: none;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.ficha-carto-sheet.papel-legal {
+  min-height: 14in;
+}
+
+.ficha-carto-sheet .ficha-print-datos,
+.ficha-carto-sheet .ficha-carto-datos {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.ficha-carto-sheet .ficha-print-datos p {
+  margin: 0 0 4px;
+}
+
+.ficha-carto-sheet .ficha-print-grid > div {
+  min-height: 28px;
+  padding: 3px 6px;
+}
+
+.ficha-carto-map-section {
+  flex: 0 0 auto;
+  margin: 3px 6px;
+}
+
+.ficha-carto-map-section .ficha-carto-map-wrap,
+.ficha-carto-map-section .ficha-print-media-body {
+  height: var(--ficha-carto-map, 3.8in) !important;
+  min-height: var(--ficha-carto-map, 3.8in) !important;
+  max-height: var(--ficha-carto-map, 3.8in);
+}
+
+.ficha-carto-medicion {
+  flex: 0 0 auto;
+  margin: 3px 6px 0;
+  border: 1px solid #d8bdc5;
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.ficha-carto-construcciones {
+  flex: 1 1 auto;
+  margin: 0 6px 4px;
+  border: 1px solid #d8bdc5;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  overflow: visible;
+}
+
+.ficha-carto-constr-head {
+  border-radius: 0;
+}
+
+.ficha-carto-medicion-head,
+.ficha-carto-subhead {
+  background: #703341;
+  color: #fff;
+  padding: 4px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ficha-carto-subhead {
+  background: #f5ecee;
+  color: #703341;
+  border-top: 1px solid #d8bdc5;
+  border-bottom: 1px solid #e2d6da;
+}
+
+.ficha-carto-resumen {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: #faf5f3;
+  border-bottom: 1px solid #efe6e8;
+}
+
+.ficha-carto-resumen > div {
+  padding: 5px 8px;
+  border-right: 1px solid #efe6e8;
+  font-size: 8px;
+}
+
+.ficha-carto-resumen > div:last-child {
+  border-right: none;
+}
+
+.ficha-carto-resumen span {
+  display: block;
+  color: #1e293b;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 7px;
+  margin-bottom: 2px;
+}
+
+.ficha-carto-resumen b {
+  display: block;
+  color: #703341;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.ficha-carto-table-wrap {
+  overflow: visible;
+  max-height: none;
+}
+
+.ficha-carto-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+}
+
+.ficha-carto-table th,
+.ficha-carto-table td {
+  border: 1px solid #e2d6da;
+  padding: 2px 4px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.ficha-carto-table thead th {
+  background: #f5ecee;
+  color: #1e293b;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 7px;
+}
+
+.ficha-carto-table tfoot td {
+  font-size: 7px;
+  font-weight: 700;
+  color: #475569;
+  text-align: left;
+  padding: 4px 8px;
+}
+
+.ficha-carto-vacio {
+  margin: 0;
+  padding: 10px;
+  text-align: center;
+  color: #64748b;
+  font-size: 9px;
+}
+
 @media print {
   body.ficha-printing-active * {
     visibility: hidden;
@@ -420,5 +593,62 @@ body.ficha-print-preview-open .ficha-workspace {
   @page {
     size: 8.5in 11in portrait;
     margin: 4mm;
+  }
+
+  body.ficha-printing-active.papel-legal .ficha-print-sheet,
+  body.ficha-printing-active.ficha-carto-print .ficha-print-sheet {
+    min-height: calc(14in - 0.12in);
+    max-height: calc(14in - 0.12in);
+    width: 8.5in;
+    max-width: 8.5in;
+    overflow: hidden;
+    box-shadow: none;
+    border-radius: 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-sheet .ficha-print-header {
+    padding: 3px 7px;
+    min-height: auto;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-print-logo {
+    height: 38px;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-print-header-text h2 {
+    font-size: 12px;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-print-header-text p {
+    font-size: 8px;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-map-section,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-medicion,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-construcciones {
+    margin: 1px 3px 2px;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-map-section .ficha-carto-map-wrap,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-map-section .ficha-print-media-body {
+    height: var(--ficha-carto-map, 3.8in) !important;
+    min-height: var(--ficha-carto-map, 3.8in) !important;
+    max-height: var(--ficha-carto-map, 3.8in) !important;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-medicion,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-construcciones,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-table,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-table-wrap {
+    visibility: visible !important;
+    page-break-inside: avoid;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-print-footer {
+    flex: 0 0 auto;
+    padding: 4px;
+    font-size: 8px;
   }
 }

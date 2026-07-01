@@ -126,12 +126,22 @@ def _bbox_from_geometry(
 
 
 async def _wfs_get_features(
-    params: dict[str, str], *, layer: str | None = None
+    params: dict[str, str],
+    *,
+    layer: str | None = None,
+    auth: bool = True,
 ) -> list[dict[str, Any]]:
-    resp = await fetch_wfs(params, timeout=45.0, layer=layer)
-    resp.raise_for_status()
-    payload = resp.json()
-    return payload.get("features") or []
+    try:
+        resp = await fetch_wfs(params, timeout=45.0, layer=layer, auth=auth)
+        if resp.status_code >= 400:
+            return []
+        resp.raise_for_status()
+        payload = resp.json()
+        return payload.get("features") or []
+    except PermissionError:
+        raise
+    except Exception:
+        return []
 
 
 async def _fetch_construcciones_mature_wfs(
@@ -144,35 +154,51 @@ async def _fetch_construcciones_mature_wfs(
     """
     safe = clave.replace("'", "''").strip().upper()
     cql = f"clavecatas='{safe}' OR claveorig='{safe}'"
-    attempts: list[dict[str, str]] = [
-        {
-            "service": "WFS",
-            "version": "1.1.0",
-            "request": "GetFeature",
-            "typeName": layer,
-            "outputFormat": "application/json",
-            "srsName": "EPSG:3857",
-            "maxFeatures": "100",
-            "CQL_FILTER": cql,
-        },
-        {
-            "service": "WFS",
-            "version": "2.0.0",
-            "request": "GetFeature",
-            "typeNames": layer,
-            "outputFormat": "application/json",
-            "srsName": f"EPSG:{settings.geographic_srid}",
-            "count": "100",
-            "CQL_FILTER": cql,
-        },
+    attempts: list[tuple[dict[str, str], bool]] = [
+        (
+            {
+                "service": "WFS",
+                "version": "1.1.0",
+                "request": "GetFeature",
+                "typeName": layer,
+                "outputFormat": "application/json",
+                "srsName": "EPSG:3857",
+                "maxFeatures": "100",
+                "CQL_FILTER": cql,
+            },
+            False,
+        ),
+        (
+            {
+                "service": "WFS",
+                "version": "1.1.0",
+                "request": "GetFeature",
+                "typeName": layer,
+                "outputFormat": "application/json",
+                "srsName": "EPSG:3857",
+                "maxFeatures": "100",
+                "CQL_FILTER": cql,
+            },
+            True,
+        ),
+        (
+            {
+                "service": "WFS",
+                "version": "2.0.0",
+                "request": "GetFeature",
+                "typeNames": layer,
+                "outputFormat": "application/json",
+                "srsName": f"EPSG:{settings.geographic_srid}",
+                "count": "100",
+                "CQL_FILTER": cql,
+            },
+            True,
+        ),
     ]
-    for params in attempts:
-        try:
-            features = await _wfs_get_features(params, layer=layer)
-            if features:
-                return features
-        except Exception:
-            continue
+    for params, use_auth in attempts:
+        features = await _wfs_get_features(params, layer=layer, auth=use_auth)
+        if features:
+            return features
     return []
 
 
@@ -294,14 +320,19 @@ def _friendly_wfs_error(exc: Exception) -> str:
             "GeoServer rechazó las credenciales WFS. "
             "Revise GEONODE_USER y GEONODE_PASSWORD."
         )
-    if "400" in text:
-        return (
-            "GeoServer no aceptó el filtro WFS sobre construcciones. "
-            "Se intentó consulta espacial por el contorno del predio."
-        )
-    if len(text) > 180:
-        return text[:180] + "…"
+    if "400" in text or "Client error" in text or "http" in text.lower():
+        return "Sin construcciones en la capa WFS para esta clave."
+    if len(text) > 120:
+        return text[:120] + "…"
     return text
+
+
+def _public_construccion_message(msg: str | None) -> str | None:
+    if not msg:
+        return None
+    if any(x in msg for x in ("Client error", "http", "HTTP", "400", "401", "403")):
+        return "Sin construcciones en la capa WFS para esta clave."
+    return msg
 
 
 async def fetch_construcciones_by_clave(
@@ -317,11 +348,8 @@ async def fetch_construcciones_by_clave(
         }
 
     safe = clave.replace("'", "''").strip().upper()
-    padre_fields = settings.field_candidates("geonode_field_construcc_padre")
-    if not padre_fields:
-        padre_fields = settings.field_candidates("geonode_field_cadastral")
+    padre_fields = ["clavecatas", "claveorig"]
 
-    srs = f"EPSG:{settings.geographic_srid}"
     last_error: str | None = None
 
     # 1) WFS maduro: clavecatas OR claveorig (06-construcciones-medicion.js)
@@ -383,50 +411,53 @@ async def fetch_construcciones_by_clave(
         except Exception as exc:
             last_error = _friendly_wfs_error(exc)
 
-    # 3) Filtro por atributo clave (si la capa expone el campo)
+    # 3) Filtro por clavecatas / claveorig (sin cuenta_pred ni UPPER)
     for field in padre_fields:
-        for cql in (
-            f"{field}='{safe}'",
-            f"strEqualsIgnoreCase({field},'{safe}')",
-        ):
-            try:
-                features = await _wfs_get_features(
-                    {
-                        "service": "WFS",
-                        "version": "2.0.0",
-                        "request": "GetFeature",
-                        "typeNames": layer,
-                        "outputFormat": "application/json",
-                        "srsName": srs,
-                        "count": "50",
-                        "CQL_FILTER": cql,
-                    },
-                    layer=layer,
-                )
-                items = [_map_construction_feature(f) for f in features]
-                if items:
-                    return {
-                        "clave_catastral": safe,
-                        "layer": layer,
-                        "field_used": field,
-                        "items": items,
-                    }
-            except PermissionError as exc:
-                return {
-                    "clave_catastral": safe,
-                    "layer": layer,
-                    "items": [],
-                    "message": str(exc),
-                }
-            except Exception as exc:
-                last_error = _friendly_wfs_error(exc)
-                continue
+        cql = f"{field}='{safe}'"
+        features = await _wfs_get_features(
+            {
+                "service": "WFS",
+                "version": "1.1.0",
+                "request": "GetFeature",
+                "typeName": layer,
+                "outputFormat": "application/json",
+                "srsName": "EPSG:3857",
+                "maxFeatures": "100",
+                "CQL_FILTER": cql,
+            },
+            layer=layer,
+            auth=False,
+        )
+        if not features:
+            features = await _wfs_get_features(
+                {
+                    "service": "WFS",
+                    "version": "1.1.0",
+                    "request": "GetFeature",
+                    "typeName": layer,
+                    "outputFormat": "application/json",
+                    "srsName": "EPSG:3857",
+                    "maxFeatures": "100",
+                    "CQL_FILTER": cql,
+                },
+                layer=layer,
+                auth=True,
+            )
+        items = [_map_construction_feature(f) for f in features]
+        if items:
+            return {
+                "clave_catastral": safe,
+                "layer": layer,
+                "field_used": field,
+                "items": items,
+            }
 
     return {
         "clave_catastral": safe,
         "layer": layer,
         "items": [],
-        "message": last_error or "Sin construcciones en la capa WFS para esta clave",
+        "message": _public_construccion_message(last_error)
+        or "Sin construcciones en la capa WFS para esta clave",
     }
 
 
