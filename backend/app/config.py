@@ -99,13 +99,14 @@ class Settings(BaseSettings):
     geonode_field_valor: str = "valor2026,valor_catastral,avaluo,valor"
 
     # Capa WFS/WMS de construcciones (ficha Construcción)
-    geonode_construcciones_layer: str = "geonode:construcciones_mexicali"
+    geonode_construcciones_layer: str = "geonode:construccionesmxli"
     geonode_construcciones_title: str = "Construcciones WMS"
-    geonode_field_construcc_padre: str = "clavecatas,clave_catastral,cve_cat,cuenta_pred"
+    geonode_field_construcc_padre: str = "clavecatas,claveorig,clave_catastral,cve_cat,cuenta_pred"
+    geonode_field_construcc_geom: str = "the_geom,geom,geometry"
     geonode_field_construcc_num: str = "claveconst,clave_const,no_const,num_const,const"
     geonode_field_construcc_niveles: str = "niveles,nivel,num_niveles"
     geonode_field_construcc_sup: str = (
-        "sup_inc,superficie,area,sup_construccion,area_m2,sup_inc_m2"
+        "suphor,sup_inc,superficie,area,sup_construccion,area_m2,sup_inc_m2"
     )
     geonode_field_construcc_tipo: str = "tipo,tipo_const,descripcion,uso,destino"
     geonode_field_construcc_perimetro: str = "perimetro,perimetro_m,perim"
@@ -171,6 +172,22 @@ class Settings(BaseSettings):
             title = titles[i] if i < len(titles) else layer_id
             result.append({"id": layer_id.replace(":", "_"), "layer": layer_id, "title": title})
         return result
+
+    def geonode_predio_wfs_layers(self) -> list[str]:
+        """Capas WFS a probar para geometría (origen + capas WMS de predios)."""
+        seen: set[str] = set()
+        out: list[str] = []
+        primary = (self.geonode_source_layer or "").strip()
+        if primary:
+            seen.add(primary)
+            out.append(primary)
+        for item in self.geonode_layer_list():
+            layer = item["layer"]
+            key = layer.lower()
+            if ("predio" in key or "parcel" in key or "catastro" in key) and layer not in seen:
+                seen.add(layer)
+                out.append(layer)
+        return out
 
 
 settings = Settings()

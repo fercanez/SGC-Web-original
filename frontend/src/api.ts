@@ -139,6 +139,7 @@ export interface CuadroConstruccionResponse {
   area_m2: number | null;
   perimetro_m: number | null;
   vertices: CuadroConstruccionVertex[];
+  error?: string;
 }
 
 export function postCuadroConstruccion(

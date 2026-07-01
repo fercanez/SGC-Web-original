@@ -50,13 +50,50 @@ def _prepare_geometry_for_map(
     return geom
 
 
+def _apply_wfs_payload(
+    db: Session,
+    result: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    norm: str,
+    layer: str,
+) -> bool:
+    features = payload.get("features") or []
+    result["wfs_feature_count"] = max(result["wfs_feature_count"], len(features))
+    result["wfs_field"] = payload.get("_wfs_field_used")
+    result["wfs_srid"] = payload.get("_wfs_srid", settings.metric_srid)
+    result["wfs_layer"] = layer
+
+    for feature in features:
+        props = feature.get("properties") or {}
+        wfs_clave = _wfs_clave_from_props(props)
+        if wfs_clave and normalize_cadastral_key(wfs_clave) != norm:
+            continue
+        raw_geom = feature.get("geometry")
+        if not raw_geom:
+            continue
+        result["geometry"] = _prepare_geometry_for_map(
+            db, raw_geom, from_srid=int(result["wfs_srid"])
+        )
+        result["source"] = "geonode_wfs"
+        result["wfs_cadastral_code"] = wfs_clave or norm
+        return True
+
+    if features and not result["geometry"]:
+        result["note"] = (
+            f"WFS ({layer}) devolvió {len(features)} feature(s) pero ninguna "
+            f"coincide con clave {norm}."
+        )
+    return False
+
+
 async def resolve_map_geometry(
     db: Session,
     clave: str,
 ) -> dict[str, Any]:
     """
     Devuelve geometría para el visor en EPSG:4326.
-    1) WFS en vivo en CRS nativo (metric_srid) + reproyección PostGIS
+    1) WFS en vivo (prueba capa origen + capas WMS de predios)
     2) parcels.geom en PostgreSQL (copia del último sync)
     """
     norm = normalize_cadastral_key(clave) or clave.strip().upper()
@@ -72,36 +109,28 @@ async def resolve_map_geometry(
         "note": None,
     }
 
-    if settings.geonode_source_layer:
+    wfs_layers = settings.geonode_predio_wfs_layers()
+    wfs_errors: list[str] = []
+
+    for layer in wfs_layers:
         try:
-            payload = await fetch_wfs_by_cadastral_code(norm, max_features=5)
-            features = payload.get("features") or []
-            result["wfs_feature_count"] = len(features)
-            result["wfs_field"] = payload.get("_wfs_field_used")
-            result["wfs_srid"] = payload.get("_wfs_srid", native_srid)
-
-            for feature in features:
-                props = feature.get("properties") or {}
-                wfs_clave = _wfs_clave_from_props(props)
-                if wfs_clave and normalize_cadastral_key(wfs_clave) != norm:
-                    continue
-                raw_geom = feature.get("geometry")
-                if not raw_geom:
-                    continue
-                result["geometry"] = _prepare_geometry_for_map(
-                    db, raw_geom, from_srid=int(result["wfs_srid"])
-                )
-                result["source"] = "geonode_wfs"
-                result["wfs_cadastral_code"] = wfs_clave or norm
+            payload = await fetch_wfs_by_cadastral_code(
+                norm, type_name=layer, max_features=5
+            )
+            if _apply_wfs_payload(db, result, payload, norm=norm, layer=layer):
                 break
-
-            if features and not result["geometry"]:
-                result["note"] = (
-                    f"WFS devolvió {len(features)} feature(s) pero ninguna "
-                    f"coincide con clave {norm}."
-                )
+        except PermissionError as exc:
+            wfs_errors.append(str(exc))
+            break
         except Exception as exc:
-            result["note"] = f"WFS no disponible ({exc}); usando copia en base de datos."
+            wfs_errors.append(f"{layer}: {exc}")
+            continue
+
+    if result["geometry"] is None and wfs_errors:
+        result["note"] = (
+            "WFS no disponible (" + "; ".join(wfs_errors[:2]) + "); "
+            "usando copia en base de datos."
+        )
 
     if result["geometry"] is None:
         parcel = db.query(Parcel).filter(Parcel.cadastral_code == norm).first()

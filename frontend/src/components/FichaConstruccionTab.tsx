@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getPredioConstrucciones,
-  postCuadroConstruccion,
   type ConstruccionCartograficaItem,
-  type CuadroConstruccionResponse,
   type PredioAlfanumericoRecord,
 } from "../api";
 import type { GeonodeLayer } from "../types/config";
+import {
+  buildCuadroConstruccionUtm,
+  type CuadroConstruccionResult,
+  type CuadroVertex,
+} from "../utils/cuadroConstruccion";
 import type { MeasureMode } from "../utils/mapSnap";
 import FichaConstruccionMap from "./FichaConstruccionMap";
 
@@ -38,7 +41,7 @@ export default function FichaConstruccionTab({
   wmsPath,
 }: Props) {
   const clave = padron.clave_catastral;
-  const [cuadro, setCuadro] = useState<CuadroConstruccionResponse | null>(null);
+  const [cuadro, setCuadro] = useState<CuadroConstruccionResult | null>(null);
   const [cuadroLoading, setCuadroLoading] = useState(false);
   const [cuadroError, setCuadroError] = useState<string | null>(null);
   const [construcciones, setConstrucciones] = useState<ConstruccionCartograficaItem[]>([]);
@@ -58,27 +61,26 @@ export default function FichaConstruccionTab({
     (!geometryClave || geometryClave === clave);
 
   useEffect(() => {
-    if (!geometryReady) {
+    if (!geometryReady || !geometry) {
       setCuadro(null);
       setCuadroError(null);
+      setCuadroLoading(false);
       return;
     }
-    let cancelled = false;
     setCuadroLoading(true);
     setCuadroError(null);
-    postCuadroConstruccion(geometry)
-      .then((data) => {
-        if (!cancelled) setCuadro(data);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setCuadroError(err.message || "Error al calcular cuadro UTM");
-      })
-      .finally(() => {
-        if (!cancelled) setCuadroLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const data = buildCuadroConstruccionUtm(geometry);
+      setCuadro(data);
+      if (data.error) setCuadroError(data.error);
+    } catch (err) {
+      setCuadroError(
+        err instanceof Error ? err.message : "Error al calcular cuadro UTM"
+      );
+      setCuadro(null);
+    } finally {
+      setCuadroLoading(false);
+    }
   }, [geometry, geometryReady, clave]);
 
   useEffect(() => {
@@ -173,7 +175,7 @@ export default function FichaConstruccionTab({
                 </tr>
               </thead>
               <tbody>
-                {cuadro.vertices.map((v) => (
+                {cuadro.vertices.map((v: CuadroVertex) => (
                   <tr key={v.vertice}>
                     <td>{v.vertice}</td>
                     <td>{v.lado}</td>

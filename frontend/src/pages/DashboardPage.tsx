@@ -211,7 +211,7 @@ export default function DashboardPage() {
 
   const loadSearchMapHighlights = useCallback(
     async (items: PredioAlfanumericoRecord[]) => {
-      if (items.length < 2) {
+      if (items.length < 1) {
         setSearchHighlights(null);
         return null;
       }
@@ -226,11 +226,11 @@ export default function DashboardPage() {
         } catch {
           features = [];
         }
-        if (features.length < 2) {
+        if (features.length < 1) {
           const fallback = await fetchMapGeometriesFallback(items);
           if (fallback.length > features.length) features = fallback;
         }
-        if (features.length < 2) {
+        if (features.length < 1) {
           const fromParcels = await fetchGeometriesFromParcels(items);
           if (fromParcels.length > features.length) features = fromParcels;
         }
@@ -537,7 +537,7 @@ export default function DashboardPage() {
     if (searchTotal > 0) setResultsPanelMode("open");
     setSidebarSection("consulta");
     setFiscalThematic(true);
-    if (searchResults.length >= 2) {
+    if (searchResults.length >= 1) {
       await loadSearchMapHighlights(searchResults);
     }
     setMapFlyTo(null);
@@ -606,17 +606,28 @@ export default function DashboardPage() {
           "search_batch"
         );
       } else {
-        setHighlightGeometry(null);
-        setHighlightLabel(null);
-        setGeometrySource(null);
-        if (linkMismatch) {
-          setSearchError(
-            `Sin geometría en mapa. El padrón ${activeRecord.clave_catastral} tiene un enlace cartográfico desactualizado; ejecute POST /api/v1/cadastral/link en el servidor.`
+        const fallbackFeatures = await fetchMapGeometriesFallback([activeRecord]);
+        const fbGeom = fallbackFeatures[0]?.geometry ?? null;
+        if (fbGeom) {
+          if (stale()) return;
+          applyHighlightGeometry(
+            fbGeom,
+            activeRecord.clave_catastral,
+            "wfs_fallback"
           );
-        } else if (!activeRecord.parcel_id) {
-          setSearchError(
-            "Predio en padrón sin polígono en cartografía (sin parcel_id ni WFS)."
-          );
+        } else {
+          setHighlightGeometry(null);
+          setHighlightLabel(null);
+          setGeometrySource(null);
+          if (linkMismatch) {
+            setSearchError(
+              `Sin geometría en mapa. El padrón ${activeRecord.clave_catastral} tiene un enlace cartográfico desactualizado; ejecute POST /api/v1/cadastral/link en el servidor.`
+            );
+          } else if (!activeRecord.parcel_id) {
+            setSearchError(
+              "Predio en padrón sin polígono en cartografía. Verifique GEONODE_USER/GEONODE_PASSWORD en el servidor y GEONODE_SOURCE_LAYER=catastro_bc:predios_oficial."
+            );
+          }
         }
       }
     } catch (err) {

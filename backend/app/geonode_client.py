@@ -8,7 +8,10 @@ from app.config import settings
 
 
 def credentials_configured() -> bool:
-    return bool(settings.geonode_user and settings.geonode_password)
+    return bool(
+        (settings.geonode_user and settings.geonode_password)
+        or settings.geonode_auth_key
+    )
 
 
 def build_wms_url(params: dict[str, str]) -> str:
@@ -124,8 +127,8 @@ async def check_wms_access() -> dict:
     }
 
 
-def build_wfs_url(params: dict[str, str]) -> str:
-    base = settings.geoserver_wfs_base
+def build_wfs_url(params: dict[str, str], *, layer: str | None = None) -> str:
+    base = _wfs_base_for_layer(layer)
     if not base:
         raise ValueError("GeoServer WFS no configurado")
     merged = dict(params)
@@ -134,19 +137,41 @@ def build_wfs_url(params: dict[str, str]) -> str:
     return f"{base}?{urlencode(merged)}"
 
 
+def _wfs_base_for_layer(layer: str | None) -> str | None:
+    """SGC maduro usa /geoserver/{workspace}/wfs para capas geonode:*."""
+    if not settings.geonode_url:
+        return None
+    path = (
+        settings.geoserver_path
+        if settings.geoserver_path.startswith("/")
+        else f"/{settings.geoserver_path}"
+    )
+    workspace = (layer or "").split(":", 1)[0].strip() if layer and ":" in layer else ""
+    if workspace:
+        return f"{settings.geonode_url}{path}/{workspace}/wfs"
+    return f"{settings.geonode_url}{path}/wfs"
+
+
 async def fetch_wfs(
     params: dict[str, str],
     *,
     timeout: float = 120.0,
+    layer: str | None = None,
 ) -> httpx.Response:
-    url = build_wfs_url(params)
+    url = build_wfs_url(params, layer=layer)
     auth = httpx_auth()
     async with httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=True,
         verify=settings.geonode_ssl_verify,
     ) as client:
-        return await client.get(url, auth=auth)
+        resp = await client.get(url, auth=auth)
+    if resp.status_code in (401, 403):
+        raise PermissionError(
+            "GeoServer WFS rechazó las credenciales (401/403). "
+            "Revise GEONODE_USER, GEONODE_PASSWORD o GEONODE_AUTH_KEY en el .env del servidor."
+        )
+    return resp
 
 
 async def fetch_wfs_geojson(
@@ -167,7 +192,7 @@ async def fetch_wfs_geojson(
         "startIndex": str(start_index),
         "sortBy": "id",
 }
-    resp = await fetch_wfs(params, timeout=timeout)
+    resp = await fetch_wfs(params, timeout=timeout, layer=type_name)
     resp.raise_for_status()
     payload = resp.json()
     payload["_wfs_srid"] = settings.metric_srid
@@ -214,7 +239,7 @@ async def fetch_wfs_by_cadastral_code(
             "CQL_FILTER": cql,
         }
         try:
-            resp = await fetch_wfs(params, timeout=timeout)
+            resp = await fetch_wfs(params, timeout=timeout, layer=layer)
             resp.raise_for_status()
             payload = resp.json()
             if payload.get("features"):

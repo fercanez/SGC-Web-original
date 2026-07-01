@@ -170,6 +170,53 @@ async def batch_map_geometries(
     return BatchMapGeometriesResponse(**data)
 
 
+@router.post("/link")
+def link_cadastral_to_parcels(
+    db: Session = Depends(get_db),
+    _=Depends(require_permission(Permission.PARCELS_SYNC.value)),
+):
+    """
+    Enlaza registros alfanuméricos con predios cartográficos ya sincronizados.
+    Ejecutar después de POST /source/sync si importó Excel antes que la geometría.
+    """
+    stats = link_all_records(db, sync_summary=True)
+    db.commit()
+    return stats
+
+
+@router.post("/cuadro-construccion")
+def cuadro_construccion(
+    body: CuadroConstruccionRequest,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("cadastral.read")),
+):
+    """Cuadro de vértices UTM (distancias, ángulos, este/norte) del contorno del predio."""
+    return build_cuadro_construccion_utm(db, body.geometry)
+
+
+@router.get("/by-parcel/{parcel_id}", response_model=PredioAlfanumericoRead)
+def get_cadastral_by_parcel(
+    parcel_id: str,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission(Permission.PARCELS_READ.value)),
+):
+    record = (
+        db.query(PredioAlfanumerico)
+        .filter(PredioAlfanumerico.parcel_id == parcel_id)
+        .first()
+    )
+    if not record:
+        parcel = db.get(Parcel, parcel_id)
+        if parcel:
+            record = _get_by_clave(db, parcel.cadastral_code)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Sin datos alfanuméricos vinculados a este predio",
+        )
+    return record
+
+
 @router.get("/{clave}/map-geometry")
 async def get_cadastral_map_geometry(
     clave: str,
@@ -200,97 +247,14 @@ async def get_cadastral_map_geometry(
         ) from exc
 
 
-@router.get("/{clave}", response_model=PredioAlfanumericoRead)
-def get_cadastral_record(
-    clave: str,
-    db: Session = Depends(get_db),
-    _=Depends(require_permission(Permission.PARCELS_READ.value)),
-):
-    record = _get_by_clave(db, clave)
-    if not record:
-        raise HTTPException(status_code=404, detail="Registro alfanumérico no encontrado")
-    return record
-
-
-@router.post("/{clave}/fiscal/refresh")
-async def refresh_cadastral_fiscal(
-    clave: str,
-    db: Session = Depends(get_db),
-    _=Depends(require_permission(Permission.PARCELS_READ.value)),
-):
-    """
-    Completa adeudo_2026 / adeudo_total desde WFS (capa de adeudos o prediosmxli)
-    cuando el padrón los trae vacíos.
-    """
-    record = _get_by_clave(db, clave)
-    if not record:
-        raise HTTPException(status_code=404, detail="Registro alfanumérico no encontrado")
-
-    from app.services.fiscal_resolve import refresh_record_fiscal
-
-    meta = await refresh_record_fiscal(db, record, persist=True)
-    db.commit()
-    db.refresh(record)
-    return {
-        "record": PredioAlfanumericoRead.model_validate(record),
-        "fiscal": meta,
-    }
-
-
-@router.get("/by-parcel/{parcel_id}", response_model=PredioAlfanumericoRead)
-def get_cadastral_by_parcel(
-    parcel_id: str,
-    db: Session = Depends(get_db),
-    _=Depends(require_permission(Permission.PARCELS_READ.value)),
-):
-    record = (
-        db.query(PredioAlfanumerico)
-        .filter(PredioAlfanumerico.parcel_id == parcel_id)
-        .first()
-    )
-    if not record:
-        parcel = db.get(Parcel, parcel_id)
-        if parcel:
-            record = _get_by_clave(db, parcel.cadastral_code)
-    if not record:
-        raise HTTPException(
-            status_code=404,
-            detail="Sin datos alfanuméricos vinculados a este predio",
-        )
-    return record
-
-
-@router.post("/link")
-def link_cadastral_to_parcels(
-    db: Session = Depends(get_db),
-    _=Depends(require_permission(Permission.PARCELS_SYNC.value)),
-):
-    """
-    Enlaza registros alfanuméricos con predios cartográficos ya sincronizados.
-    Ejecutar después de POST /source/sync si importó Excel antes que la geometría.
-    """
-    stats = link_all_records(db, sync_summary=True)
-    db.commit()
-    return stats
-
-
-@router.post("/cuadro-construccion")
-def cuadro_construccion(
-    body: CuadroConstruccionRequest,
-    db: Session = Depends(get_db),
-    _=Depends(require_permission("cadastral.read")),
-):
-    """Cuadro de vértices UTM (distancias, ángulos, este/norte) del contorno del predio."""
-    return build_cuadro_construccion_utm(db, body.geometry)
-
-
 @router.get("/{clave}/construcciones")
 async def construcciones_predio(
     clave: str,
+    db: Session = Depends(get_db),
     _=Depends(require_permission("cadastral.read")),
 ):
     """Construcciones de la clave desde capa WFS GeoServer."""
-    return await fetch_construcciones_by_clave(clave)
+    return await fetch_construcciones_by_clave(clave, db)
 
 
 @router.get("/{clave}/folio-real")
@@ -386,4 +350,41 @@ def propietarios_predio(
             }
             for r in rows
         ],
+    }
+
+
+@router.get("/{clave}", response_model=PredioAlfanumericoRead)
+def get_cadastral_record(
+    clave: str,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission(Permission.PARCELS_READ.value)),
+):
+    record = _get_by_clave(db, clave)
+    if not record:
+        raise HTTPException(status_code=404, detail="Registro alfanumérico no encontrado")
+    return record
+
+
+@router.post("/{clave}/fiscal/refresh")
+async def refresh_cadastral_fiscal(
+    clave: str,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission(Permission.PARCELS_READ.value)),
+):
+    """
+    Completa adeudo_2026 / adeudo_total desde WFS (capa de adeudos o prediosmxli)
+    cuando el padrón los trae vacíos.
+    """
+    record = _get_by_clave(db, clave)
+    if not record:
+        raise HTTPException(status_code=404, detail="Registro alfanumérico no encontrado")
+
+    from app.services.fiscal_resolve import refresh_record_fiscal
+
+    meta = await refresh_record_fiscal(db, record, persist=True)
+    db.commit()
+    db.refresh(record)
+    return {
+        "record": PredioAlfanumericoRead.model_validate(record),
+        "fiscal": meta,
     }
