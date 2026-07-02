@@ -25,6 +25,7 @@ import {
   getGeonodeStatus,
   getHealth,
   getCadastralMapGeometry,
+  getCadastralRecord,
   refreshCadastralFiscal,
   getParcel,
   getParcelOwnerships,
@@ -51,6 +52,7 @@ import {
   normalizeCadastralCode,
 } from "../utils/geometry";
 import { gestionCatastralMapPadding } from "../utils/mapViewport";
+import { fetchPredioWfsMaduro } from "../utils/predioWfs";
 import {
   applyFiscalToFeatures,
   buildHighlightCollection,
@@ -471,11 +473,11 @@ export default function DashboardPage() {
       .then((mapGeo) => {
         if (mapGeo?.geometry) {
           setHighlightGeometry(mapGeo.geometry);
-          setHighlightLabel(parcel.cadastral_code);
+          setHighlightLabel(padron?.clave_catastral ?? parcel.cadastral_code);
         }
       })
       .catch(() => {});
-  }, [selectedId, padron?.parcel_id, parcels]);
+  }, [selectedId, padron?.parcel_id, padron?.clave_catastral, parcels]);
 
   const geonodeLayerCount = config?.geonode.layers?.length ?? 0;
   const selected = parcels.find((p) => p.id === selectedId);
@@ -486,15 +488,6 @@ export default function DashboardPage() {
       normalizeCadastralCode(
         padron.clave_catastral_norm ?? padron.clave_catastral
       );
-  /** Si hay polígono resaltado para el predio consultado (WFS/BD). */
-  const padronEnMapaBusqueda =
-    padron &&
-    searchHighlights?.features.some(
-      (f) => f.properties?.clave === padron.clave_catastral
-    );
-  const dibujadoEnMapa = !!(
-    padron && (highlightGeometry || padronEnMapaBusqueda)
-  );
   const padronFiscal = padron
     ? fiscalStatusFromAdeudos(padron.adeudo_2026, padron.adeudo_total)
     : "sin_dato";
@@ -510,6 +503,14 @@ export default function DashboardPage() {
       clave: padron.clave_catastral,
     };
   }, [padron, highlightGeometry, searchHighlights, padronFiscal]);
+  const dibujadoEnMapa = Boolean(padron && activeMapHighlight?.geometry);
+  const fichaMapGeometry = activeMapHighlight?.geometry ?? highlightGeometry ?? null;
+  const fichaMapClave =
+    activeMapHighlight?.clave ??
+    highlightLabel ??
+    padron?.clave_catastral ??
+    null;
+  const fichaGeometryLoading = geometryLoading && !fichaMapGeometry;
   const muniLabel =
     config?.municipality.full_name ?? "Mexicali, Baja California";
   const currency = config?.locale.currency ?? "MXN";
@@ -575,11 +576,17 @@ export default function DashboardPage() {
         activeRecord.clave_catastral
       ).catch(() => null);
       if (stale()) return;
-      const parcelGeom = mapGeo?.geometry
-        ? null
-        : await resolveParcelGeometry(activeRecord);
+      const wfsDirect =
+        mapGeo?.geometry
+          ? null
+          : await fetchPredioWfsMaduro(activeRecord.clave_catastral, config);
+      if (stale()) return;
+      const parcelGeom =
+        mapGeo?.geometry || wfsDirect
+          ? null
+          : await resolveParcelGeometry(activeRecord);
       const localGeom =
-        mapGeo?.geometry || parcelGeom
+        mapGeo?.geometry || wfsDirect || parcelGeom
           ? null
           : findGeometryInSearch(searchHighlights, activeRecord.clave_catastral);
 
@@ -591,6 +598,13 @@ export default function DashboardPage() {
           mapGeo.source ?? "geonode_wfs"
         );
         if (mapGeo.note) setSearchError(mapGeo.note);
+      } else if (wfsDirect) {
+        if (stale()) return;
+        applyHighlightGeometry(
+          wfsDirect,
+          activeRecord.clave_catastral,
+          "wfs_direct"
+        );
       } else if (parcelGeom) {
         if (stale()) return;
         applyHighlightGeometry(
@@ -644,6 +658,30 @@ export default function DashboardPage() {
       }
     } finally {
       if (!stale()) setGeometryLoading(false);
+    }
+  }
+
+  async function handleMapPredioSelect(clave: string) {
+    const norm = normalizeCadastralCode(clave);
+    if (!norm) return;
+
+    const fromSearch = searchResults.find(
+      (r) =>
+        normalizeCadastralCode(r.clave_catastral_norm ?? r.clave_catastral) ===
+        norm
+    );
+    if (fromSearch) {
+      await selectPadronRecord(fromSearch);
+      return;
+    }
+
+    try {
+      const record = await getCadastralRecord(norm);
+      await selectPadronRecord(record);
+    } catch {
+      setSearchError(
+        `No se encontró el predio ${norm} en el padrón alfanumérico.`
+      );
     }
   }
 
@@ -885,6 +923,12 @@ export default function DashboardPage() {
             geojson={geojson}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            onPredioSelect={handleMapPredioSelect}
+            onPickMiss={() =>
+              setSearchError(
+                "No se identificó ningún predio en ese punto. Acérquese más o active la capa Predios WMS."
+              )
+            }
             config={config}
             flyTo={mapFlyTo}
             highlightLabel={highlightLabel}
@@ -991,9 +1035,9 @@ export default function DashboardPage() {
         <FichaCatastralModal
           open={fichaOpen}
           padron={padron}
-          geometry={highlightGeometry}
-          geometryClave={highlightLabel}
-          geometryLoading={geometryLoading}
+          geometry={fichaMapGeometry}
+          geometryClave={fichaMapClave}
+          geometryLoading={fichaGeometryLoading}
           dibujadoEnMapa={dibujadoEnMapa}
           currency={currency}
           geonodeLayers={geonodeLayers}
@@ -1001,6 +1045,7 @@ export default function DashboardPage() {
           construccionesConfig={config?.construcciones}
           searchResults={searchResults}
           onNavigate={selectPadronRecord}
+          onPredioPick={handleMapPredioSelect}
           onClose={() => setFichaOpen(false)}
         />
       )}

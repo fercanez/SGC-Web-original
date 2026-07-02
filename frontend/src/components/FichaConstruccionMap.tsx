@@ -9,6 +9,7 @@ import {
   scheduleGeonodeRasterOpacity,
 } from "../map/wmsLayerState";
 import {
+  bboxFromFeatureCollection,
   bboxFromGeometry,
   centroidFromGeometry,
   fitOptionsForGeometry,
@@ -65,6 +66,7 @@ interface Props {
   onMeasurePointsChange: (points: GeoJSON.Position[]) => void;
   layersPanelOpen: boolean;
   onCloseLayersPanel: () => void;
+  mapResizeNonce?: number;
 }
 
 function hasLayer(map: maplibregl.Map, id: string): boolean {
@@ -192,6 +194,20 @@ function construccionesVectorFc(
   return { type: "FeatureCollection", features };
 }
 
+function centroidFromConstrucciones(
+  fc: GeoJSON.FeatureCollection
+): [number, number] | null {
+  for (const feature of fc.features) {
+    const geom = feature.geometry;
+    if (!geom || geom.type === "GeometryCollection" || !isWgs84Geometry(geom)) {
+      continue;
+    }
+    const center = centroidFromGeometry(geom);
+    if (center) return center;
+  }
+  return null;
+}
+
 export default function FichaConstruccionMap({
   clave,
   geometry,
@@ -207,6 +223,7 @@ export default function FichaConstruccionMap({
   onMeasurePointsChange,
   layersPanelOpen,
   onCloseLayersPanel,
+  mapResizeNonce = 0,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -227,7 +244,10 @@ export default function FichaConstruccionMap({
   }, [geometry, geometryClave, clave]);
 
   const geometryKey = useMemo(
-    () => (effectiveGeometry ? `${clave}|${JSON.stringify(effectiveGeometry)}` : ""),
+    () =>
+      effectiveGeometry
+        ? `${clave}|${JSON.stringify(effectiveGeometry)}`
+        : `${clave}|no-geom`,
     [clave, effectiveGeometry]
   );
 
@@ -298,20 +318,27 @@ export default function FichaConstruccionMap({
 
   useEffect(() => {
     setMapVisible(false);
-    if (!containerRef.current || !effectiveGeometry) return;
+    if (!containerRef.current) return;
 
     const bootKey = mapBootKey;
     mapBootKeyRef.current = bootKey;
 
-    const fc: GeoJSON.FeatureCollection = {
-      type: "FeatureCollection",
-      features: [
-        { type: "Feature", properties: { clave }, geometry: effectiveGeometry },
-      ],
-    };
-    const cuadroMeas = buildCuadroMeasurements(effectiveGeometry, 18);
     const vectorFc = construccionesVectorFc(construccionItems);
-    const center = centroidFromGeometry(effectiveGeometry) ?? [-115.468278, 32.624639];
+    const fc: GeoJSON.FeatureCollection = effectiveGeometry
+      ? {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", properties: { clave }, geometry: effectiveGeometry },
+          ],
+        }
+      : { type: "FeatureCollection", features: [] };
+    const cuadroMeas: GeoJSON.FeatureCollection = effectiveGeometry
+      ? buildCuadroMeasurements(effectiveGeometry, 18)
+      : { type: "FeatureCollection", features: [] };
+    const center: [number, number] = effectiveGeometry
+      ? (centroidFromGeometry(effectiveGeometry) ??
+        centroidFromConstrucciones(vectorFc) ?? [-115.468278, 32.624639])
+      : (centroidFromConstrucciones(vectorFc) ?? [-115.468278, 32.624639]);
 
     const sources: Record<string, maplibregl.SourceSpecification> = {
       basemap: getBaseMapRasterSource(baseMap),
@@ -509,7 +536,7 @@ export default function FichaConstruccionMap({
       container: containerRef.current,
       style: { version: 8, glyphs: MAPLIBRE_GLYPHS_URL, sources, layers },
       center,
-      zoom: 18,
+      zoom: effectiveGeometry ? 18 : vectorFc.features.length ? 17 : 14,
       attributionControl: false,
       interactive: true,
       fadeDuration: 0,
@@ -520,7 +547,14 @@ export default function FichaConstruccionMap({
     const reveal = () => {
       if (mapBootKeyRef.current !== bootKey) return;
       baseMapAppliedRef.current = baseMap;
-      fitMapToGeometry(map, effectiveGeometry);
+      if (effectiveGeometry) {
+        fitMapToGeometry(map, effectiveGeometry);
+      } else {
+        const bbox = bboxFromFeatureCollection(vectorFc);
+        if (bbox) {
+          map.fitBounds(bbox, { padding: 48, maxZoom: 18, duration: 0 });
+        }
+      }
       scheduleGeonodeRasterOpacity(
         map,
         geonodeLayers,
@@ -545,7 +579,36 @@ export default function FichaConstruccionMap({
       mapRef.current = null;
       setMapVisible(false);
     };
-  }, [clave, geometryKey, layerKey, wmsPath, geonodeLayers, effectiveGeometry, mapBootKey, baseMap]);
+  }, [
+    clave,
+    geometryKey,
+    layerKey,
+    wmsPath,
+    geonodeLayers,
+    effectiveGeometry,
+    construccionItems,
+    mapBootKey,
+    baseMap,
+  ]);
+
+  useEffect(() => {
+    mapRef.current?.resize();
+  }, [mapResizeNonce, mapReady]);
+
+  useEffect(() => {
+    const el = containerRef.current?.closest(".ficha-mini-map-stage");
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let timer = 0;
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => mapRef.current?.resize(), 50);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [mapReady, geometryKey]);
 
   const handleMapClick = useCallback(
     (e: maplibregl.MapMouseEvent) => {
@@ -787,12 +850,40 @@ export default function FichaConstruccionMap({
 
   if (!effectiveGeometry) {
     return (
-      <div className="ficha-mini-map ficha-mini-map--empty">
-        <p>
-          {geometryClave && geometryClave !== clave
-            ? "Actualizando geometría…"
-            : "Sin geometría cartográfica para el cuadro de construcción."}
-        </p>
+      <div className="ficha-mini-map-wrap ficha-construccion-map-wrap">
+        <div className="ficha-mini-map-stage">
+          <div
+            ref={containerRef}
+            className={`ficha-mini-map ficha-construccion-map${
+              mapVisible ? " ficha-mini-map--ready" : " ficha-mini-map--loading"
+            }${measureEnabled && measureMode !== "off" ? " ficha-construccion-map--measuring" : ""}`}
+            aria-label="Medición cartográfica"
+          />
+          <div className="ficha-mini-map-overlay">
+            <p>
+              {geometryClave && geometryClave !== clave
+                ? "Actualizando geometría…"
+                : "Sin polígono del predio; mostrando mapa base y construcciones WFS."}
+            </p>
+          </div>
+          {measureEnabled && measureMode !== "off" && (
+            <div className="ficha-medicion-panel" role="region" aria-label="Medición">
+              <strong>Medición</strong>
+              <p className="ficha-medicion-hint">Clic en el mapa para agregar vértices.</p>
+            </div>
+          )}
+          <div className="ficha-construccion-coords">{cursorLabel}</div>
+          <FichaMapLayersPanel
+            open={layersPanelOpen}
+            onClose={onCloseLayersPanel}
+            rows={panelRows}
+            baseMap={baseMap}
+            onBaseMapChange={setBaseMap}
+            onToggle={toggleLayer}
+            onOpacity={setOpacity}
+            onMove={moveLayer}
+          />
+        </div>
       </div>
     );
   }

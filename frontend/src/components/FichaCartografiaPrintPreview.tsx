@@ -107,17 +107,21 @@ export default function FichaCartografiaPrintPreview({
 
   const cuadroData = useMemo((): CuadroConstruccionResult | null => {
     if (cuadro?.vertices?.length) return cuadro;
-    if (geometryReady) {
-      const built = buildCuadroConstruccionUtm(geometryReady);
+    const geom = geometryReady ?? geometry;
+    if (geom) {
+      const built = buildCuadroConstruccionUtm(geom);
       if (built.vertices.length) return built;
     }
     return cuadro;
-  }, [cuadro, geometryReady]);
+  }, [cuadro, geometry, geometryReady]);
 
-  const constrData = useMemo(() => {
-    if (construcciones.length > 0) return construcciones;
-    return resolvedConstr;
-  }, [construcciones, resolvedConstr]);
+  const constrData = useMemo(
+    () => (construcciones.length > 0 ? construcciones : resolvedConstr),
+    [construcciones, resolvedConstr]
+  );
+
+  const cuadroRows = cuadroData?.vertices ?? [];
+  const constrRows = constrData;
 
   useEffect(() => {
     if (!open) return;
@@ -180,14 +184,14 @@ export default function FichaCartografiaPrintPreview({
   const mapHeightIn = useMemo(() => {
     if (printMapHeightIn != null) return printMapHeightIn;
     return computeCartografiaMapHeightIn(
-      cuadroData?.vertices?.length ?? 0,
-      constrData.length,
+      cuadroRows.length,
+      constrRows.length,
       Boolean(printMapSnapshot)
     );
   }, [
     printMapHeightIn,
-    cuadroData?.vertices?.length,
-    constrData.length,
+    cuadroRows.length,
+    constrRows.length,
     printMapSnapshot,
   ]);
 
@@ -201,7 +205,7 @@ export default function FichaCartografiaPrintPreview({
   const supConstTxt =
     padron.sup_const != null ? `${Number(padron.sup_const).toFixed(2)} m²` : "—";
   const tieneConst =
-    constrData.length > 0 ||
+    constrRows.length > 0 ||
     (padron.sup_const != null && Number(padron.sup_const) > 0)
       ? "Sí"
       : "No";
@@ -302,8 +306,8 @@ export default function FichaCartografiaPrintPreview({
 
   async function handlePrint() {
     const printHeight = computeCartografiaMapHeightIn(
-      cuadroData?.vertices?.length ?? 0,
-      constrData.length,
+      cuadroRows.length,
+      constrRows.length,
       true
     );
     setPrintMapHeightIn(printHeight);
@@ -518,7 +522,7 @@ export default function FichaCartografiaPrintPreview({
                 layerOrder={layerOrder}
                 highlightVisible={highlightVisible}
                 showCuadro={showCuadro}
-                construccionItems={constrData}
+                construccionItems={constrRows}
                 measurePoints={measurePoints}
                 measureMode={measureMode}
                 measureHidden={measureHidden}
@@ -565,7 +569,7 @@ export default function FichaCartografiaPrintPreview({
 
             <div className="ficha-carto-subhead">
               Cuadro de construcción — {padron.clave_catastral}
-              {dataLoading && !cuadroData?.vertices?.length ? " (cargando…)" : ""}
+              {dataLoading && !cuadroRows.length ? " (cargando…)" : ""}
             </div>
             <div className="ficha-carto-table-wrap">
               <table className="ficha-carto-table">
@@ -580,8 +584,8 @@ export default function FichaCartografiaPrintPreview({
                   </tr>
                 </thead>
                 <tbody>
-                  {cuadroData?.vertices?.length ? (
-                    cuadroData.vertices.map((v) => (
+                  {cuadroRows.length > 0 ? (
+                    cuadroRows.map((v) => (
                       <tr key={v.vertice}>
                         <td>{v.vertice}</td>
                         <td>{v.lado}</td>
@@ -612,14 +616,14 @@ export default function FichaCartografiaPrintPreview({
           <section className="ficha-carto-construcciones">
             <div className="ficha-carto-subhead ficha-carto-constr-head">
               Construcciones de la clave (capa cartográfica)
-              {dataLoading && constrData.length === 0
+              {dataLoading && constrRows.length === 0
                 ? " — cargando…"
-                : constrData.length > 0
-                  ? ` — ${constrData.length} registros`
+                : constrRows.length > 0
+                  ? ` — ${constrRows.length} registros`
                   : ""}
             </div>
             <div className="ficha-carto-table-wrap">
-              {constrData.length > 0 ? (
+              {constrRows.length > 0 ? (
                 <table className="ficha-carto-table">
                   <thead>
                     <tr>
@@ -631,7 +635,7 @@ export default function FichaCartografiaPrintPreview({
                     </tr>
                   </thead>
                   <tbody>
-                    {constrData.map((c, idx) => (
+                    {constrRows.map((c, idx) => (
                       <tr key={`${c.clave_const ?? idx}-${idx}`}>
                         <td>{val(c.clave_const)}</td>
                         <td>{val(c.niveles)}</td>

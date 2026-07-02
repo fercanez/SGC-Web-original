@@ -17,6 +17,7 @@ import FichaPrintPreview from "./FichaPrintPreview";
 import FichaConstruccionTab from "./FichaConstruccionTab";
 import type { GeonodeLayer, PublicConfig } from "../types/config";
 import { mergeConstruccionLayer } from "../utils/mapSnap";
+import { useFichaWorkspaceResize } from "../hooks/useFichaWorkspaceResize";
 import "../styles/ficha-catastral.css";
 
 export type FichaCatastralTab =
@@ -55,6 +56,7 @@ interface Props {
   construccionesConfig?: PublicConfig["construcciones"];
   searchResults?: PredioAlfanumericoRecord[];
   onNavigate?: (record: PredioAlfanumericoRecord) => void;
+  onPredioPick?: (clave: string) => void;
   onClose: () => void;
 }
 
@@ -106,6 +108,7 @@ function FichaDatosTab({
   geonodeLayers,
   wmsPath,
   onOpenPrint,
+  onPredioSelect,
 }: {
   padron: PredioAlfanumericoRecord;
   geometry: GeoJSON.Geometry | null;
@@ -122,6 +125,7 @@ function FichaDatosTab({
   geonodeLayers: GeonodeLayer[];
   wmsPath: string;
   onOpenPrint: () => void;
+  onPredioSelect?: (clave: string) => void;
 }) {
   const centro = useMemo(() => centroidFromGeometry(geometry), [geometry]);
   const streetViewSrc = centro
@@ -285,6 +289,7 @@ function FichaDatosTab({
             wmsPath={wmsPath}
             layersPanelOpen={layersPanelOpen}
             onCloseLayersPanel={() => setLayersPanelOpen(false)}
+            onPredioSelect={onPredioSelect}
           />
         )}
         <p className="ficha-map-status">
@@ -314,12 +319,16 @@ export default function FichaCatastralModal({
   construccionesConfig,
   searchResults = [],
   onNavigate,
+  onPredioPick,
   onClose,
 }: Props) {
   const fichaGeonodeLayers = useMemo(
     () => mergeConstruccionLayer(geonodeLayers, construccionesConfig),
     [geonodeLayers, construccionesConfig]
   );
+
+  const { workspaceRef, size, mapResizeNonce, startResize } =
+    useFichaWorkspaceResize(open);
 
   const [tab, setTab] = useState<FichaCatastralTab>("datos");
   const [propietarios, setPropietarios] = useState<PredioPropietarioItem[]>([]);
@@ -406,10 +415,12 @@ export default function FichaCatastralModal({
       }}
     >
       <div
+        ref={workspaceRef}
         className={`ficha-workspace ${fiscalBadgeClass(fiscal)}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ficha-titulo"
+        style={{ width: size.width, height: size.height }}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="ficha-header">
@@ -470,7 +481,11 @@ export default function FichaCatastralModal({
           ))}
         </nav>
 
-        <div className="ficha-body">
+        <div
+          className={`ficha-body${
+            tab === "construccion" ? " ficha-body-construccion" : ""
+          }`}
+        >
           {tab === "datos" && (
             <FichaDatosTab
               padron={padron}
@@ -488,6 +503,7 @@ export default function FichaCatastralModal({
               geonodeLayers={fichaGeonodeLayers}
               wmsPath={wmsPath}
               onOpenPrint={() => setPrintPreviewOpen(true)}
+              onPredioSelect={onPredioPick}
             />
           )}
           {tab === "construccion" && (
@@ -500,6 +516,7 @@ export default function FichaCatastralModal({
               wmsPath={wmsPath}
               construccionesConfig={construccionesConfig}
               currency={currency}
+              mapResizeNonce={mapResizeNonce}
             />
           )}
           {tab === "archivo" && <TabPlaceholder title="Archivo digital" />}
@@ -512,6 +529,43 @@ export default function FichaCatastralModal({
           {tab === "colonia" && <TabPlaceholder title="Colonia / fraccionamiento" />}
           {tab === "zona-h" && <TabPlaceholder title="Zona homogénea" />}
         </div>
+
+        <div
+          className="ficha-resize ficha-resize-e"
+          title="Ajustar ancho"
+          aria-label="Ajustar ancho de la ficha"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            startResize("e", e.clientX, e.clientY);
+          }}
+        />
+        <div
+          className="ficha-resize ficha-resize-s"
+          title="Ajustar alto"
+          aria-label="Ajustar alto de la ficha"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            startResize("s", e.clientX, e.clientY);
+          }}
+        />
+        <div
+          className="ficha-resize ficha-resize-se"
+          title="Redimensionar ficha"
+          aria-label="Redimensionar ficha"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            startResize("se", e.clientX, e.clientY);
+          }}
+        />
       </div>
 
       <FichaPrintPreview

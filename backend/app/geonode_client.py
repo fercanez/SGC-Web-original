@@ -1,5 +1,6 @@
 """Cliente HTTP hacia GeoServer WMS de GeoMexicali (con autenticación)."""
 
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -217,6 +218,7 @@ async def fetch_wfs_by_cadastral_code(
     if not layer:
         raise ValueError("GEONODE_SOURCE_LAYER no configurado")
     safe = cadastral_code.replace("'", "''")
+    cql_filters: list[str] = [f"clavecatas='{safe}' OR claveorig='{safe}'"]
     fields = (
         [field_name.strip()]
         if field_name
@@ -224,35 +226,164 @@ async def fetch_wfs_by_cadastral_code(
     )
     if not fields:
         raise ValueError("Campo catastral no configurado")
-
-    out_srid = srs if srs is not None else settings.metric_srid
-    last_error: Exception | None = None
     for field in fields:
-        cql = f"{field}='{safe}'"
-        params = {
-            "service": "WFS",
-            "version": "2.0.0",
-            "request": "GetFeature",
-            "typeNames": layer,
-            "outputFormat": "application/json",
-            "srsName": f"EPSG:{out_srid}",
-            "count": str(max_features),
-            "CQL_FILTER": cql,
-        }
-        try:
-            resp = await fetch_wfs(params, timeout=timeout, layer=layer)
-            resp.raise_for_status()
-            payload = resp.json()
-            if payload.get("features"):
-                payload["_wfs_field_used"] = field
-                payload["_wfs_srid"] = out_srid
-                return payload
-        except Exception as exc:
-            last_error = exc
+        fl = field.lower()
+        if fl in ("clavecatas", "claveorig"):
             continue
+        cql_filters.append(f"{field}='{safe}'")
+
+    srs_attempts = [srs] if srs is not None else [settings.geographic_srid, settings.metric_srid]
+    last_error: Exception | None = None
+    versions = ("2.0.0", "1.1.0")
+    for cql in cql_filters:
+        for out_srid in srs_attempts:
+            for version in versions:
+                if version == "1.1.0":
+                    params = {
+                        "service": "WFS",
+                        "version": "1.1.0",
+                        "request": "GetFeature",
+                        "typeName": layer,
+                        "outputFormat": "application/json",
+                        "srsName": f"EPSG:{out_srid}",
+                        "maxFeatures": str(max_features),
+                        "CQL_FILTER": cql,
+                    }
+                else:
+                    params = {
+                        "service": "WFS",
+                        "version": "2.0.0",
+                        "request": "GetFeature",
+                        "typeNames": layer,
+                        "outputFormat": "application/json",
+                        "srsName": f"EPSG:{out_srid}",
+                        "count": str(max_features),
+                        "CQL_FILTER": cql,
+                    }
+                try:
+                    resp = await fetch_wfs(params, timeout=timeout, layer=layer, auth=True)
+                    if resp.status_code in (401, 403):
+                        resp = await fetch_wfs(
+                            params, timeout=timeout, layer=layer, auth=False
+                        )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    if payload.get("features"):
+                        payload["_wfs_field_used"] = cql
+                        payload["_wfs_srid"] = out_srid
+                        return payload
+                except PermissionError:
+                    try:
+                        resp = await fetch_wfs(
+                            params, timeout=timeout, layer=layer, auth=False
+                        )
+                        resp.raise_for_status()
+                        payload = resp.json()
+                        if payload.get("features"):
+                            payload["_wfs_field_used"] = cql
+                            payload["_wfs_srid"] = out_srid
+                            return payload
+                    except Exception as exc:
+                        last_error = exc
+                        continue
+                except Exception as exc:
+                    last_error = exc
+                    continue
     if last_error:
         raise last_error
-    return {"type": "FeatureCollection", "features": [], "_wfs_srid": out_srid}
+    return {
+        "type": "FeatureCollection",
+        "features": [],
+        "_wfs_srid": srs_attempts[-1] if srs_attempts else settings.metric_srid,
+    }
+
+
+def _extract_clave_from_wfs_props(props: dict[str, Any]) -> str | None:
+    for key in (
+        "clave_catastral",
+        "clavecatas",
+        "claveorig",
+        "clave",
+        "CLAVE_CATASTRAL",
+        "ClaveCatas",
+    ):
+        val = props.get(key)
+        if val not in (None, ""):
+            return str(val).strip().upper()
+    for cand in settings.field_candidates("geonode_field_cadastral"):
+        for key, value in props.items():
+            if str(key).lower() == cand.lower() and value not in (None, ""):
+                return str(value).strip().upper()
+    return None
+
+
+async def fetch_wfs_at_point(
+    lon: float,
+    lat: float,
+    *,
+    type_name: str | None = None,
+    max_features: int = 5,
+    timeout: float = 30.0,
+) -> dict:
+    """Predio en un punto (WFS CQL espacial — paridad SGC maduro /predios/intersecta)."""
+    layer = (type_name or settings.geonode_source_layer).strip()
+    if not layer:
+        raise ValueError("GEONODE_SOURCE_LAYER no configurado")
+
+    safe_lon = f"{lon:.8f}"
+    safe_lat = f"{lat:.8f}"
+    cql_filters = [
+        f"INTERSECTS(geom, SRID=4326;POINT({safe_lon} {safe_lat}))",
+        f"INTERSECTS(the_geom, SRID=4326;POINT({safe_lon} {safe_lat}))",
+        f"DWITHIN(geom, POINT({safe_lon} {safe_lat}), 0.00008, degrees)",
+        f"DWITHIN(the_geom, POINT({safe_lon} {safe_lat}), 0.00008, degrees)",
+    ]
+
+    last_error: Exception | None = None
+    for cql in cql_filters:
+        for version in ("2.0.0", "1.1.0"):
+            for out_srid in (settings.geographic_srid, settings.metric_srid):
+                if version == "1.1.0":
+                    params = {
+                        "service": "WFS",
+                        "version": "1.1.0",
+                        "request": "GetFeature",
+                        "typeName": layer,
+                        "outputFormat": "application/json",
+                        "srsName": f"EPSG:{out_srid}",
+                        "maxFeatures": str(max_features),
+                        "CQL_FILTER": cql,
+                    }
+                else:
+                    params = {
+                        "service": "WFS",
+                        "version": "2.0.0",
+                        "request": "GetFeature",
+                        "typeNames": layer,
+                        "outputFormat": "application/json",
+                        "srsName": f"EPSG:{out_srid}",
+                        "count": str(max_features),
+                        "CQL_FILTER": cql,
+                    }
+                try:
+                    resp = await fetch_wfs(params, timeout=timeout, layer=layer, auth=True)
+                    if resp.status_code in (401, 403):
+                        resp = await fetch_wfs(
+                            params, timeout=timeout, layer=layer, auth=False
+                        )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    if payload.get("features"):
+                        payload["_wfs_cql"] = cql
+                        payload["_wfs_srid"] = out_srid
+                        return payload
+                except Exception as exc:
+                    last_error = exc
+                    continue
+
+    if last_error:
+        raise last_error
+    return {"type": "FeatureCollection", "features": []}
 
 
 async def check_wfs_access(type_name: str | None = None) -> dict:

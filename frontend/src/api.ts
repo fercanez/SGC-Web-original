@@ -375,6 +375,40 @@ export function getCadastralRecord(
   );
 }
 
+export interface CadastralAtPointResult {
+  clave_catastral: string;
+  geometry?: GeoJSON.Geometry | null;
+  parcel_id?: string | null;
+  source?: string;
+}
+
+/** Predio bajo un clic en el mapa (PostGIS + WFS — paridad SGC maduro /predios/intersecta). */
+export async function getCadastralAtPoint(
+  lon: number,
+  lat: number
+): Promise<CadastralAtPointResult | null> {
+  const qs = new URLSearchParams({
+    lon: String(lon),
+    lat: String(lat),
+  });
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(
+    `${getApiUrl()}/api/v1/cadastral/intersecta?${qs}`,
+    { headers, cache: "no-store" }
+  );
+  if (res.status === 401) {
+    clearToken();
+    if (!isLoginPath()) window.location.href = getLoginPath();
+    throw new Error("Sesión expirada");
+  }
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<CadastralAtPointResult>;
+}
+
 export interface FiscalRefreshResponse {
   record: PredioAlfanumericoRecord;
   fiscal: {
@@ -399,7 +433,7 @@ export function refreshCadastralFiscal(
 
 export interface CadastralMapGeometry {
   clave_catastral: string;
-  geometry: GeoJSON.Geometry;
+  geometry: GeoJSON.Geometry | null;
   source: "geonode_wfs" | "database_sync" | string | null;
   wfs_feature_count?: number;
   database_cadastral_code?: string | null;
@@ -429,11 +463,26 @@ export async function getCadastralMapGeometry(
     throw new Error("Sesión expirada");
   }
   if (res.status === 404) return null;
+  if (res.status === 500) {
+    try {
+      const errBody = (await res.json()) as { detail?: string; note?: string };
+      console.warn(
+        "map-geometry:",
+        errBody.note ?? errBody.detail ?? res.statusText
+      );
+    } catch {
+      /* */
+    }
+    return null;
+  }
   if (!res.ok) {
     throw new Error(await parseError(res));
   }
   const data = (await res.json()) as CadastralMapGeometry;
-  return data.geometry ? data : null;
+  if (!data.geometry && data.note) {
+    console.warn("map-geometry sin polígono:", data.note);
+  }
+  return data;
 }
 
 export interface BatchMapGeometriesResponse {

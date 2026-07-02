@@ -45,7 +45,7 @@ export async function fetchConstruccionesWfsMaduro(
   const url =
     `${base}${wfsPath}?service=WFS&version=1.1.0&request=GetFeature` +
     `&typeName=${encodeURIComponent(resolved.layer)}` +
-    `&outputFormat=application%2Fjson&srsName=EPSG%3A3857` +
+    `&outputFormat=application%2Fjson&srsName=EPSG%3A4326` +
     `&CQL_FILTER=${cql}&maxFeatures=100`;
 
   const resp = await fetch(url, { cache: "no-store" });

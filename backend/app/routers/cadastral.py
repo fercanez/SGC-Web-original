@@ -26,6 +26,7 @@ from app.services.cadastral_alfanumerico import (
 from app.services.cadastral_search import search_predios_advanced
 
 router = APIRouter(prefix="/cadastral", tags=["cadastral"])
+map_pick_router = APIRouter(tags=["cadastral-map-pick"])
 
 
 def _get_by_clave(db: Session, clave: str) -> PredioAlfanumerico | None:
@@ -217,6 +218,47 @@ def get_cadastral_by_parcel(
     return record
 
 
+@router.get("/intersecta")
+async def cadastral_intersecta(
+    lon: float = Query(..., ge=-180, le=180),
+    lat: float = Query(..., ge=-90, le=90),
+    db: Session = Depends(get_db),
+    _=Depends(require_permission(Permission.PARCELS_READ.value)),
+):
+    return await _resolve_intersecta(db, lon, lat)
+
+
+async def _resolve_intersecta(db: Session, lon: float, lat: float):
+    """
+    Predio bajo un punto (clic en mapa).
+    Paridad SGC maduro GET /predios/intersecta: PostGIS + WFS GeoServer.
+    """
+    from app.services.predio_at_point import resolve_predio_at_point
+
+    try:
+        hit = await resolve_predio_at_point(db, lon, lat)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al identificar predio: {exc}",
+        ) from exc
+    if not hit:
+        raise HTTPException(status_code=404, detail="No se encontró predio en esa ubicación")
+    return hit
+
+
+@map_pick_router.get("/catastro/intersection")
+@map_pick_router.get("/catastro/intersecta")
+async def catastro_map_pick_alias(
+    lon: float = Query(..., ge=-180, le=180),
+    lat: float = Query(..., ge=-90, le=90),
+    db: Session = Depends(get_db),
+    _=Depends(require_permission(Permission.PARCELS_READ.value)),
+):
+    """Alias de /cadastral/intersecta (compatibilidad frontend)."""
+    return await _resolve_intersecta(db, lon, lat)
+
+
 @router.get("/{clave}/map-geometry")
 async def get_cadastral_map_geometry(
     clave: str,
@@ -226,25 +268,29 @@ async def get_cadastral_map_geometry(
     """
     Geometría para resaltar en el mapa.
     Prioriza WFS en vivo (misma fuente que las capas WMS de GeoNode).
+    Siempre responde 200; geometry puede ser null con nota explicativa.
     """
-    try:
-        from app.services.map_geometry import resolve_map_geometry
+    from app.services.map_geometry import resolve_map_geometry
 
-        # Aunque el predio no tenga enlace cartográfico (parcel_id), intentamos
-        # ubicarlo por su clave en GeoServer WFS. No devolvemos 404 por registro.
+    norm = normalize_cadastral_key(clave) or clave.strip().upper()
+    try:
         record = _get_by_clave(db, clave)
         clave_busqueda = record.clave_catastral if record else clave
         data = await resolve_map_geometry(db, clave_busqueda)
-        if not data.get("geometry"):
-            data["note"] = data.get("note") or "Sin geometría para esta clave"
-        return data
-    except HTTPException:
-        raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al obtener geometría: {exc}",
-        ) from exc
+        data = {
+            "clave_catastral": norm,
+            "geometry": None,
+            "source": None,
+            "wfs_feature_count": 0,
+            "display_srid": 4326,
+            "database_cadastral_code": None,
+            "note": f"Error al obtener geometría: {exc}",
+        }
+
+    if not data.get("geometry"):
+        data["note"] = data.get("note") or "Sin geometría para esta clave"
+    return data
 
 
 @router.get("/{clave}/construcciones")

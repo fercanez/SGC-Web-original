@@ -27,6 +27,7 @@ interface Props {
   wmsPath: string;
   construccionesConfig?: PublicConfig["construcciones"];
   currency: string;
+  mapResizeNonce?: number;
 }
 
 function fmtNum(value: number | null | undefined, digits = 2, suffix = "") {
@@ -48,9 +49,14 @@ export default function FichaConstruccionTab({
   wmsPath,
   construccionesConfig,
   currency,
+  mapResizeNonce = 0,
 }: Props) {
   const clave = padron.clave_catastral;
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+  const [printSnapshot, setPrintSnapshot] = useState<{
+    cuadro: CuadroConstruccionResult | null;
+    construcciones: ConstruccionCartograficaItem[];
+  } | null>(null);
   const [cuadro, setCuadro] = useState<CuadroConstruccionResult | null>(null);
   const [cuadroLoading, setCuadroLoading] = useState(false);
   const [cuadroError, setCuadroError] = useState<string | null>(null);
@@ -159,6 +165,23 @@ export default function FichaConstruccionTab({
     if (padron.sup_const != null && Number(padron.sup_const) > 0) return "SI";
     return "NO";
   }, [construcciones.length, padron.sup_const]);
+
+  function openPrintPreview() {
+    let snapshotCuadro = cuadro;
+    if (!snapshotCuadro?.vertices?.length && geometryReady && geometry) {
+      snapshotCuadro = buildCuadroConstruccionUtm(geometry);
+    }
+    setPrintSnapshot({
+      cuadro: snapshotCuadro,
+      construcciones: [...construcciones],
+    });
+    setPrintPreviewOpen(true);
+  }
+
+  function closePrintPreview() {
+    setPrintPreviewOpen(false);
+    setPrintSnapshot(null);
+  }
 
   const supPadron = padron.sup_const != null ? Number(padron.sup_const) : null;
 
@@ -297,7 +320,7 @@ export default function FichaConstruccionTab({
             <button
               type="button"
               className="ficha-btn-secondary"
-              onClick={() => setPrintPreviewOpen(true)}
+              onClick={openPrintPreview}
             >
               Imprimir / PDF
             </button>
@@ -354,26 +377,29 @@ export default function FichaConstruccionTab({
           </div>
         )}
 
-        {geometryLoading ? (
-          <div className="ficha-media-placeholder">Cargando mapa…</div>
-        ) : (
-          <FichaConstruccionMap
-            clave={clave}
-            geometry={geometry}
-            geometryClave={geometryClave}
-            geonodeLayers={geonodeLayers}
-            wmsPath={wmsPath}
-            construccionItems={construcciones}
-            measureEnabled={measureEnabled}
-            measureMode={measureEnabled ? measureMode : "off"}
-            snapEnabled={snapEnabled}
-            measureHidden={measureHidden}
-            measurePoints={measurePoints}
-            onMeasurePointsChange={setMeasurePoints}
-            layersPanelOpen={layersPanelOpen}
-            onCloseLayersPanel={() => setLayersPanelOpen(false)}
-          />
-        )}
+        <div className="ficha-construccion-map-body">
+          {geometryLoading ? (
+            <div className="ficha-media-placeholder">Cargando mapa…</div>
+          ) : (
+            <FichaConstruccionMap
+              clave={clave}
+              geometry={geometry}
+              geometryClave={geometryClave}
+              geonodeLayers={geonodeLayers}
+              wmsPath={wmsPath}
+              construccionItems={construcciones}
+              measureEnabled={measureEnabled}
+              measureMode={measureEnabled ? measureMode : "off"}
+              snapEnabled={snapEnabled}
+              measureHidden={measureHidden}
+              measurePoints={measurePoints}
+              onMeasurePointsChange={setMeasurePoints}
+              layersPanelOpen={layersPanelOpen}
+              onCloseLayersPanel={() => setLayersPanelOpen(false)}
+              mapResizeNonce={mapResizeNonce}
+            />
+          )}
+        </div>
       </section>
 
       <FichaCartografiaPrintPreview
@@ -381,8 +407,8 @@ export default function FichaConstruccionTab({
         padron={padron}
         geometry={geometry}
         geometryClave={geometryClave}
-        cuadro={cuadro}
-        construcciones={construcciones}
+        cuadro={printSnapshot?.cuadro ?? cuadro}
+        construcciones={printSnapshot?.construcciones ?? construcciones}
         geonodeLayers={geonodeLayers}
         wmsPath={wmsPath}
         currency={currency}
@@ -390,7 +416,7 @@ export default function FichaConstruccionTab({
         measurePoints={measurePoints}
         measureMode={measureEnabled ? measureMode : "off"}
         measureHidden={measureHidden}
-        onClose={() => setPrintPreviewOpen(false)}
+        onClose={closePrintPreview}
       />
     </div>
   );

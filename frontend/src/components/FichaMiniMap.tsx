@@ -28,7 +28,11 @@ import {
   PREDIOS_WMS_NEAR_OPACITY,
   prediosLayerIds,
 } from "../config/mapLayers";
-import type { GeonodeLayer } from "../types/config";
+import type { GeonodeLayer, PublicConfig } from "../types/config";
+import {
+  identifyPredioClaveAtPoint,
+  mapShowsSelectablePredio,
+} from "../utils/mapIdentify";
 import FichaMapLayersPanel, {
   buildFichaLayerOrder,
   layerTitle,
@@ -45,6 +49,7 @@ interface Props {
   wmsPath: string;
   layersPanelOpen: boolean;
   onCloseLayersPanel: () => void;
+  onPredioSelect?: (clave: string) => void;
 }
 
 function hasLayer(map: maplibregl.Map, id: string): boolean {
@@ -93,9 +98,13 @@ export default function FichaMiniMap({
   wmsPath,
   layersPanelOpen,
   onCloseLayersPanel,
+  onPredioSelect,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const onPredioSelectRef = useRef(onPredioSelect);
+  const geonodeLayersRef = useRef(geonodeLayers);
+  const wmsPathRef = useRef(wmsPath);
   const mapBootKeyRef = useRef("");
   const baseMapAppliedRef = useRef<BaseMapId | null>(null);
   const visibleLayersRef = useRef<Record<string, boolean>>({});
@@ -111,7 +120,10 @@ export default function FichaMiniMap({
   }, [geometry, geometryClave, clave]);
 
   const geometryKey = useMemo(
-    () => (effectiveGeometry ? `${clave}|${JSON.stringify(effectiveGeometry)}` : ""),
+    () =>
+      effectiveGeometry
+        ? `${clave}|${JSON.stringify(effectiveGeometry)}`
+        : `${clave}|no-geom`,
     [clave, effectiveGeometry]
   );
 
@@ -160,27 +172,39 @@ export default function FichaMiniMap({
   const layerKey = `${geonodeLayers.map((l) => l.layer).join("|")}|${wmsPath}`;
   const mapBootKey = `${clave}|${geometryKey}|${layerKey}`;
 
+  const wfsPickConfig = useMemo((): PublicConfig | null => {
+    const predios = geonodeLayers.find((l) => layerRole(l) === "predios");
+    if (!predios) return null;
+    return { source: { layer: predios.layer } } as PublicConfig;
+  }, [geonodeLayers]);
+
+  onPredioSelectRef.current = onPredioSelect;
+  geonodeLayersRef.current = geonodeLayers;
+  wmsPathRef.current = wmsPath;
+
   useEffect(() => {
     setMapVisible(false);
-    if (!containerRef.current || !effectiveGeometry) return;
+    if (!containerRef.current) return;
 
     const bootKey = mapBootKey;
     mapBootKeyRef.current = bootKey;
 
-    const fc: GeoJSON.FeatureCollection = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { clave },
-          geometry: effectiveGeometry,
-        },
-      ],
-    };
+    const fc: GeoJSON.FeatureCollection = effectiveGeometry
+      ? {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: { clave },
+              geometry: effectiveGeometry,
+            },
+          ],
+        }
+      : { type: "FeatureCollection", features: [] };
 
-    const center = centroidFromGeometry(effectiveGeometry) ?? [
-      -115.468278, 32.624639,
-    ];
+    const center: [number, number] = effectiveGeometry
+      ? (centroidFromGeometry(effectiveGeometry) ?? [-115.468278, 32.624639])
+      : [-115.468278, 32.624639];
 
     const sources: Record<string, maplibregl.SourceSpecification> = {
       basemap: getBaseMapRasterSource(baseMap),
@@ -239,7 +263,7 @@ export default function FichaMiniMap({
       container: containerRef.current,
       style: { version: 8, sources, layers },
       center,
-      zoom: 17,
+      zoom: effectiveGeometry ? 17 : 14,
       attributionControl: false,
       interactive: true,
       fadeDuration: 0,
@@ -250,7 +274,7 @@ export default function FichaMiniMap({
     const reveal = () => {
       if (mapBootKeyRef.current !== bootKey) return;
       baseMapAppliedRef.current = baseMap;
-      fitMapToGeometry(map, effectiveGeometry);
+      if (effectiveGeometry) fitMapToGeometry(map, effectiveGeometry);
       scheduleGeonodeRasterOpacity(
         map,
         geonodeLayers,
@@ -270,6 +294,69 @@ export default function FichaMiniMap({
       setMapVisible(false);
     };
   }, [clave, geometryKey, layerKey, wmsPath, geonodeLayers, effectiveGeometry, mapBootKey]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const activeMap: maplibregl.Map = mapRef.current;
+
+    let dragStart: { x: number; y: number } | null = null;
+
+    async function onMapClick(e: maplibregl.MapMouseEvent) {
+      if (!onPredioSelectRef.current) return;
+      if (dragStart) {
+        const dx = e.point.x - dragStart.x;
+        const dy = e.point.y - dragStart.y;
+        if (Math.hypot(dx, dy) > 6) return;
+      }
+
+      const picked = await identifyPredioClaveAtPoint(
+        activeMap,
+        e.point,
+        e.lngLat,
+        {
+          wmsPath: wmsPathRef.current,
+          geonodeLayers: geonodeLayersRef.current,
+          allowWms: true,
+          config: wfsPickConfig,
+        }
+      );
+      if (picked && picked !== clave.trim().toUpperCase()) {
+        onPredioSelectRef.current(picked);
+      }
+    }
+
+    function onMapMove(e: maplibregl.MapMouseEvent) {
+      const canvas = activeMap.getCanvas();
+      if (
+        onPredioSelectRef.current &&
+        mapShowsSelectablePredio(activeMap, e.point, activeMap.getZoom())
+      ) {
+        canvas.style.cursor = "pointer";
+        return;
+      }
+      canvas.style.cursor = "";
+    }
+
+    function onDragStart(e: maplibregl.MapMouseEvent) {
+      dragStart = { x: e.point.x, y: e.point.y };
+    }
+
+    function onDragEnd() {
+      dragStart = null;
+    }
+
+    activeMap.on("mousedown", onDragStart);
+    activeMap.on("mouseup", onDragEnd);
+    activeMap.on("click", onMapClick);
+    activeMap.on("mousemove", onMapMove);
+    return () => {
+      activeMap.off("mousedown", onDragStart);
+      activeMap.off("mouseup", onDragEnd);
+      activeMap.off("click", onMapClick);
+      activeMap.off("mousemove", onMapMove);
+      activeMap.getCanvas().style.cursor = "";
+    };
+  }, [mapReady, clave, wfsPickConfig]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -405,12 +492,31 @@ export default function FichaMiniMap({
 
   if (!effectiveGeometry) {
     return (
-      <div className="ficha-mini-map ficha-mini-map--empty">
-        <p>
-          {geometryClave && geometryClave !== clave
-            ? "Actualizando localización cartográfica…"
-            : "Sin geometría cartográfica para este predio."}
-        </p>
+      <div className="ficha-mini-map-wrap">
+        <div className="ficha-mini-map-stage">
+          <div
+            ref={containerRef}
+            className={`ficha-mini-map${mapVisible ? " ficha-mini-map--ready" : " ficha-mini-map--loading"}`}
+            aria-label="Localización cartográfica"
+          />
+          <div className="ficha-mini-map-overlay">
+            <p>
+              {geometryClave && geometryClave !== clave
+                ? "Actualizando localización cartográfica…"
+                : "Sin polígono del predio; mapa base y capas WMS disponibles."}
+            </p>
+          </div>
+          <FichaMapLayersPanel
+            open={layersPanelOpen}
+            onClose={onCloseLayersPanel}
+            rows={panelRows}
+            baseMap={baseMap}
+            onBaseMapChange={setBaseMap}
+            onToggle={toggleLayer}
+            onOpacity={setOpacity}
+            onMove={moveLayer}
+          />
+        </div>
       </div>
     );
   }

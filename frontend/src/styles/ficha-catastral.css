@@ -6,15 +6,13 @@
   z-index: 1200;
   background: rgba(15, 23, 42, 0.55);
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 12px;
 }
 
 .ficha-workspace {
-  width: min(1720px, 98vw);
-  max-height: calc(100vh - 16px);
-  height: calc(100vh - 16px);
+  position: relative;
   display: flex;
   flex-direction: column;
   background: #f4f5f7;
@@ -23,6 +21,10 @@
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
   border: 2px solid #7a3a49;
   margin: auto;
+  min-width: 960px;
+  min-height: 520px;
+  max-width: 99vw;
+  max-height: 94vh;
 }
 
 .ficha-workspace.ficha-badge-ok {
@@ -194,6 +196,70 @@
   overflow: auto;
   padding: 12px 14px 14px;
   min-height: 0;
+}
+
+.ficha-body-construccion {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+}
+
+.ficha-resize {
+  position: absolute;
+  z-index: 5;
+  touch-action: none;
+}
+
+.ficha-resize-e {
+  top: 36px;
+  right: 0;
+  width: 8px;
+  bottom: 14px;
+  cursor: ew-resize;
+}
+
+.ficha-resize-s {
+  left: 0;
+  right: 14px;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+  background: linear-gradient(180deg, #ece4e7 0%, #dcc9d0 100%);
+  border-top: 1px solid #c4aab4;
+}
+
+.ficha-resize-s::before {
+  content: "";
+  display: block;
+  width: 52px;
+  height: 4px;
+  margin: 2px auto 0;
+  border-radius: 999px;
+  background: rgba(90, 40, 52, 0.38);
+}
+
+.ficha-resize-se {
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 0 45%, rgba(112, 51, 65, 0.35) 45% 100%);
+  border-bottom-right-radius: 10px;
+}
+
+body.ficha-workspace-resizing {
+  cursor: nwse-resize;
+  user-select: none;
+}
+
+body.ficha-workspace-resizing .ficha-resize-e {
+  cursor: ew-resize;
+}
+
+body.ficha-workspace-resizing .ficha-resize-s {
+  cursor: ns-resize;
 }
 
 .ficha-datos-layout {
@@ -455,6 +521,27 @@
   pointer-events: none;
 }
 
+.ficha-mini-map-overlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.ficha-mini-map-overlay p {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d8bdc5;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .ficha-capas-panel {
   position: absolute;
   top: 8px;
@@ -642,10 +729,13 @@
 
 .ficha-construccion-layout {
   display: grid;
-  grid-template-columns: minmax(340px, 0.95fr) minmax(380px, 1.05fr);
+  /* Misma proporción que Datos: formulario ~mitad, mapa ~mitad (paridad SGC maduro 42% / mapa) */
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
   gap: 12px;
   align-items: stretch;
-  min-height: min(560px, calc(100vh - 220px));
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 @media (max-width: 1200px) {
@@ -665,12 +755,26 @@
 }
 
 .ficha-construccion-tablas {
-  max-height: calc(100vh - 220px);
   overflow: auto;
+  min-height: 0;
 }
 
 .ficha-construccion-map-col {
-  min-height: 420px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ficha-construccion-map-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ficha-construccion-map-body .ficha-media-placeholder {
+  flex: 1;
+  min-height: 0;
 }
 
 .ficha-construccion-resumen {
@@ -808,12 +912,22 @@
   cursor: not-allowed;
 }
 
+.ficha-construccion-map-wrap {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .ficha-construccion-map-wrap .ficha-mini-map-stage {
-  min-height: 360px;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .ficha-construccion-map {
-  min-height: 360px;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .ficha-construccion-map--measuring {

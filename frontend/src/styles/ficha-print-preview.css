@@ -356,16 +356,22 @@ body.ficha-print-preview-open .ficha-workspace {
 .ficha-carto-sheet {
   display: flex;
   flex-direction: column;
-  width: min(100%, 8.5in);
+  width: 8.5in;
   max-width: 8.5in;
   min-height: 14in;
-  max-height: none;
   box-sizing: border-box;
   overflow: visible;
+  background: #fff;
 }
 
 .ficha-carto-sheet.papel-legal {
   min-height: 14in;
+  height: auto;
+}
+
+.ficha-print-scroll:has(.ficha-carto-sheet) {
+  padding: 12px 16px 24px;
+  align-items: center;
 }
 
 .ficha-carto-sheet .ficha-print-datos,
@@ -387,30 +393,40 @@ body.ficha-print-preview-open .ficha-workspace {
 .ficha-carto-map-section {
   flex: 0 0 auto;
   margin: 3px 6px;
+  overflow: hidden;
+  isolation: isolate;
+  z-index: 1;
 }
 
 .ficha-carto-map-section .ficha-carto-map-wrap,
 .ficha-carto-map-section .ficha-print-media-body {
-  height: var(--ficha-carto-map, 3.8in) !important;
-  min-height: var(--ficha-carto-map, 3.8in) !important;
-  max-height: var(--ficha-carto-map, 3.8in);
+  height: var(--ficha-carto-map, 3.5in) !important;
+  min-height: var(--ficha-carto-map, 3.5in) !important;
+  max-height: var(--ficha-carto-map, 3.5in);
+  overflow: hidden;
 }
 
 .ficha-carto-medicion {
   flex: 0 0 auto;
   margin: 3px 6px 0;
   border: 1px solid #d8bdc5;
-  border-radius: 4px;
+  border-radius: 4px 4px 0 0;
   overflow: visible;
+  position: relative;
+  z-index: 2;
+  background: #fff;
 }
 
 .ficha-carto-construcciones {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   margin: 0 6px 4px;
   border: 1px solid #d8bdc5;
   border-top: none;
   border-radius: 0 0 4px 4px;
   overflow: visible;
+  position: relative;
+  z-index: 2;
+  background: #fff;
 }
 
 .ficha-carto-constr-head {
@@ -476,15 +492,31 @@ body.ficha-print-preview-open .ficha-workspace {
 .ficha-carto-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 8px;
+  font-size: 7px;
+  table-layout: fixed;
+}
+
+.ficha-carto-table tbody {
+  display: table-row-group;
+}
+
+.ficha-carto-table tr {
+  display: table-row;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .ficha-carto-table th,
 .ficha-carto-table td {
   border: 1px solid #e2d6da;
-  padding: 2px 4px;
+  padding: 1px 3px;
   text-align: center;
   vertical-align: middle;
+  color: #1e293b;
+  background: #fff;
+  line-height: 1.25;
+  overflow: visible;
+  visibility: visible;
 }
 
 .ficha-carto-table thead th {
@@ -595,17 +627,29 @@ body.ficha-print-preview-open .ficha-workspace {
     margin: 4mm;
   }
 
-  body.ficha-printing-active.papel-legal .ficha-print-sheet,
   body.ficha-printing-active.ficha-carto-print .ficha-print-sheet {
-    min-height: calc(14in - 0.12in);
-    max-height: calc(14in - 0.12in);
-    width: 8.5in;
-    max-width: 8.5in;
-    overflow: hidden;
+    width: 8.5in !important;
+    max-width: 8.5in !important;
+    min-height: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
     box-shadow: none;
     border-radius: 0;
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-print-scroll {
+    padding: 0;
+    overflow: visible;
+    display: block;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-sheet {
+    width: 8.5in !important;
+    min-height: auto !important;
+    height: auto !important;
   }
 
   body.ficha-printing-active.ficha-carto-print .ficha-carto-sheet .ficha-print-header {
@@ -633,9 +677,17 @@ body.ficha-print-preview-open .ficha-workspace {
 
   body.ficha-printing-active.ficha-carto-print .ficha-carto-map-section .ficha-carto-map-wrap,
   body.ficha-printing-active.ficha-carto-print .ficha-carto-map-section .ficha-print-media-body {
-    height: var(--ficha-carto-map, 3.8in) !important;
-    min-height: var(--ficha-carto-map, 3.8in) !important;
-    max-height: var(--ficha-carto-map, 3.8in) !important;
+    height: var(--ficha-carto-map, 3.5in) !important;
+    min-height: var(--ficha-carto-map, 3.5in) !important;
+    max-height: var(--ficha-carto-map, 3.5in) !important;
+  }
+
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-table th,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-table td,
+  body.ficha-printing-active.ficha-carto-print .ficha-carto-table tr {
+    visibility: visible !important;
+    color: #1e293b !important;
+    background: #fff !important;
   }
 
   body.ficha-printing-active.ficha-carto-print .ficha-carto-medicion,

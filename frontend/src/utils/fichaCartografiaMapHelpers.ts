@@ -112,11 +112,13 @@ export function computeCartografiaMapHeightIn(
   numConstrRows: number,
   forPrint = false
 ): number {
-  let reservado = 3.35;
-  reservado += numCuadroRows * 0.135 + numConstrRows * 0.125;
-  if (forPrint) reservado = Math.max(3.1, reservado - 0.08);
-  const altoUtil = 13.85;
-  let mapIn = Math.max(3.35, Math.min(5.9, altoUtil - reservado));
-  if (forPrint) mapIn = Math.max(3.2, mapIn - 0.05);
+  const rowCuadro = numCuadroRows > 7 ? 0.105 : 0.125;
+  const rowConstr = 0.11;
+  let reservado = 3.05;
+  reservado += numCuadroRows * rowCuadro + numConstrRows * rowConstr;
+  if (forPrint) reservado = Math.max(2.95, reservado - 0.06);
+  const altoUtil = 13.72;
+  let mapIn = Math.max(2.85, Math.min(4.65, altoUtil - reservado));
+  if (forPrint) mapIn = Math.max(2.75, mapIn - 0.04);
   return Math.round(mapIn * 100) / 100;
 }

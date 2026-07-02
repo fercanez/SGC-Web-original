@@ -33,6 +33,44 @@ def _wfs_clave_from_props(props: dict[str, Any]) -> str | None:
     return None
 
 
+def _walk_positions(coords: Any, fn) -> None:
+    if not coords:
+        return
+    if isinstance(coords[0], (int, float)):
+        fn(coords)
+        return
+    for part in coords:
+        _walk_positions(part, fn)
+
+
+def _coords_look_wgs84(geojson_geom: dict[str, Any]) -> bool:
+    """Coordenadas plausibles lon/lat (EPSG:4326)."""
+    lngs: list[float] = []
+    lats: list[float] = []
+
+    def collect(pair: list[float]) -> None:
+        if len(pair) < 2:
+            return
+        lngs.append(float(pair[0]))
+        lats.append(float(pair[1]))
+
+    gtype = geojson_geom.get("type")
+    coords = geojson_geom.get("coordinates")
+    if gtype not in ("Polygon", "MultiPolygon") or not coords:
+        return False
+    _walk_positions(coords, collect)
+    if not lngs:
+        return False
+    return (
+        max(abs(x) for x in lngs) <= 180
+        and max(abs(x) for x in lats) <= 90
+        and min(lngs) > -125
+        and max(lngs) < -110
+        and min(lats) > 28
+        and max(lats) < 34
+    )
+
+
 def _prepare_geometry_for_map(
     db: Session,
     geom: dict[str, Any],
@@ -41,12 +79,27 @@ def _prepare_geometry_for_map(
     simplify: bool = False,
 ) -> dict[str, Any]:
     """UTM (32611) → WGS84 (4326). simplify=True solo para relleno de manzana (batch)."""
-    if from_srid != settings.geographic_srid:
-        geom = reproject_geojson(
-            db, geom, from_srid=from_srid, to_srid=settings.geographic_srid
-        )
+    target = settings.geographic_srid
+    if from_srid != target and not _coords_look_wgs84(geom):
+        try:
+            geom = reproject_geojson(
+                db, geom, from_srid=from_srid, to_srid=target
+            )
+        except Exception:
+            if _coords_look_wgs84(geom):
+                pass
+            else:
+                try:
+                    geom = reproject_geojson(
+                        db, geom, from_srid=target, to_srid=target
+                    )
+                except Exception:
+                    return geom
     if simplify:
-        return normalize_for_map_display(geom)
+        try:
+            return normalize_for_map_display(geom)
+        except Exception:
+            return geom
     return geom
 
 
@@ -72,9 +125,13 @@ def _apply_wfs_payload(
         raw_geom = feature.get("geometry")
         if not raw_geom:
             continue
-        result["geometry"] = _prepare_geometry_for_map(
-            db, raw_geom, from_srid=int(result["wfs_srid"])
-        )
+        try:
+            result["geometry"] = _prepare_geometry_for_map(
+                db, raw_geom, from_srid=int(result["wfs_srid"])
+            )
+        except Exception as exc:
+            result["note"] = f"WFS ({layer}): no se pudo preparar geometría ({exc})"
+            continue
         result["source"] = "geonode_wfs"
         result["wfs_cadastral_code"] = wfs_clave or norm
         return True
@@ -121,7 +178,7 @@ async def resolve_map_geometry(
                 break
         except PermissionError as exc:
             wfs_errors.append(str(exc))
-            break
+            continue
         except Exception as exc:
             wfs_errors.append(f"{layer}: {exc}")
             continue
@@ -135,13 +192,19 @@ async def resolve_map_geometry(
     if result["geometry"] is None:
         parcel = db.query(Parcel).filter(Parcel.cadastral_code == norm).first()
         if parcel and parcel.geom is not None:
-            result["geometry"] = _geometry_from_parcel(db, parcel.id)
-            result["source"] = "database_sync"
-            result["database_cadastral_code"] = parcel.cadastral_code
-            result["note"] = (
-                (result.get("note") or "")
-                + " Geometría de sync previo; ejecute POST /source/sync para actualizar."
-            ).strip()
+            try:
+                result["geometry"] = _geometry_from_parcel(db, parcel.id)
+                result["source"] = "database_sync"
+                result["database_cadastral_code"] = parcel.cadastral_code
+                result["note"] = (
+                    (result.get("note") or "")
+                    + " Geometría de sync previo; ejecute POST /source/sync para actualizar."
+                ).strip()
+            except Exception as exc:
+                result["note"] = (
+                    (result.get("note") or "")
+                    + f" Error leyendo geometría en BD ({exc})."
+                ).strip()
 
     if result["geometry"] is None:
         result["note"] = (
@@ -149,6 +212,9 @@ async def resolve_map_geometry(
             or "Sin geometría en GeoServer ni en PostgreSQL para esta clave."
         )
     elif result["geometry"]:
-        result["vertex_count"] = count_vertices(result["geometry"])
+        try:
+            result["vertex_count"] = count_vertices(result["geometry"])
+        except Exception:
+            result["vertex_count"] = None
 
     return result

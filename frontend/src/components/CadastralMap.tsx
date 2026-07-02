@@ -28,6 +28,10 @@ import type { MapFitPadding } from "../utils/mapViewport";
 import { normalizeCadastralCode } from "../utils/geometry";
 import { PREDIOS_WMS_NEAR_ZOOM, wmsStackIds, wmsStackOrder } from "../config/mapLayers";
 import type { PublicConfig } from "../types/config";
+import {
+  identifyPredioClaveAtPoint,
+  mapShowsSelectablePredio,
+} from "../utils/mapIdentify";
 
 /** Por encima de esto el visor usa solo capas WMS (evita congelar el navegador). */
 const MAX_VECTOR_PARCELS = 8000;
@@ -140,6 +144,9 @@ interface Props {
   geojson: GeoJSONFeatureCollection | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Clic en predio (clave catastral) — abre ficha / dashboard. */
+  onPredioSelect?: (clave: string) => void;
+  onPickMiss?: () => void;
   config: PublicConfig | null;
   /** Centrar mapa tras búsqueda en padrón (lon, lat). */
   flyTo?: { lng: number; lat: number; zoom?: number } | null;
@@ -170,6 +177,8 @@ export default function CadastralMap({
   geojson,
   selectedId,
   onSelect,
+  onPredioSelect,
+  onPickMiss,
   config,
   flyTo,
   highlightLabel,
@@ -191,6 +200,12 @@ export default function CadastralMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const claveMarkerRef = useRef<maplibregl.Marker | null>(null);
   const fitSeqRef = useRef(0);
+  const onSelectRef = useRef(onSelect);
+  const onPredioSelectRef = useRef(onPredioSelect);
+  const onPickMissRef = useRef(onPickMiss);
+  const geonodeLayersRef = useRef<PublicConfig["geonode"]["layers"]>([]);
+  const wmsPathRef = useRef("/api/v1/geonode/wms");
+  const configRef = useRef<PublicConfig | null>(null);
   const [mapReady, setMapReady] = useState(0);
   const [internalLayers, setInternalLayers] = useState<Record<string, boolean>>({});
   const visibleLayers = visibleLayersProp ?? internalLayers;
@@ -200,6 +215,13 @@ export default function CadastralMap({
   const geonodeLayers = config?.geonode.layers ?? [];
   const geonodeEnabled = config?.geonode.enabled ?? false;
   const wmsPath = config?.geonode.wms_proxy_path ?? "/api/v1/geonode/wms";
+
+  onSelectRef.current = onSelect;
+  onPredioSelectRef.current = onPredioSelect;
+  onPickMissRef.current = onPickMiss;
+  geonodeLayersRef.current = geonodeLayers;
+  wmsPathRef.current = wmsPath;
+  configRef.current = config;
 
   useEffect(() => {
     if (!geonodeLayers.length || visibleLayersProp) return;
@@ -350,18 +372,6 @@ export default function CadastralMap({
             "line-width": 2,
           },
         });
-
-        map.on("click", "parcels-fill", (e) => {
-          const f = e.features?.[0];
-          const id = f?.properties?.id as string | undefined;
-          if (id) onSelect(id);
-        });
-        map.on("mouseenter", "parcels-fill", () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", "parcels-fill", () => {
-          map.getCanvas().style.cursor = "";
-        });
       }
 
       const skipParcelFit =
@@ -393,7 +403,80 @@ export default function CadastralMap({
 
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [geojson, onSelect, layerKey, activeHighlight, searchHighlights]);
+  }, [geojson, layerKey, activeHighlight, searchHighlights]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const activeMap: maplibregl.Map = mapRef.current;
+
+    let dragStart: { x: number; y: number } | null = null;
+
+    function onDragStart(e: maplibregl.MapMouseEvent) {
+      dragStart = { x: e.point.x, y: e.point.y };
+    }
+
+    async function onMapClick(e: maplibregl.MapMouseEvent) {
+      if (dragStart) {
+        const dx = e.point.x - dragStart.x;
+        const dy = e.point.y - dragStart.y;
+        if (Math.hypot(dx, dy) > 6) return;
+      }
+
+      const clave = await identifyPredioClaveAtPoint(
+        activeMap,
+        e.point,
+        e.lngLat,
+        {
+          wmsPath: wmsPathRef.current,
+          geonodeLayers: geonodeLayersRef.current,
+          allowWms: true,
+          config: configRef.current,
+        }
+      );
+
+      if (clave) {
+        onPredioSelectRef.current?.(clave);
+        return;
+      }
+
+      const layers = ["parcels-fill"].filter((id) => hasLayer(activeMap, id));
+      if (layers.length) {
+        const hit = activeMap.queryRenderedFeatures(e.point, { layers })[0];
+        const parcelId = hit?.properties?.id as string | undefined;
+        if (parcelId) {
+          onSelectRef.current(parcelId);
+          return;
+        }
+      }
+
+      onPickMissRef.current?.();
+    }
+
+    function onMapMove(e: maplibregl.MapMouseEvent) {
+      const canvas = activeMap.getCanvas();
+      if (mapShowsSelectablePredio(activeMap, e.point, activeMap.getZoom())) {
+        canvas.style.cursor = "pointer";
+        return;
+      }
+      canvas.style.cursor = "";
+    }
+
+    function onDragEnd() {
+      dragStart = null;
+    }
+
+    activeMap.on("mousedown", onDragStart);
+    activeMap.on("mouseup", onDragEnd);
+    activeMap.on("click", onMapClick);
+    activeMap.on("mousemove", onMapMove);
+    return () => {
+      activeMap.off("mousedown", onDragStart);
+      activeMap.off("mouseup", onDragEnd);
+      activeMap.off("click", onMapClick);
+      activeMap.off("mousemove", onMapMove);
+      activeMap.getCanvas().style.cursor = "";
+    };
+  }, [mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
