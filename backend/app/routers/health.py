@@ -8,6 +8,12 @@ from app.schemas import HealthResponse
 router = APIRouter(tags=["health"])
 
 
+@router.get("/health/live")
+def health_live() -> dict[str, str]:
+    """Sin base de datos — útil para saber si uvicorn/nginx responden."""
+    return {"status": "ok"}
+
+
 @router.get("/health", response_model=HealthResponse)
 def health(db: Session = Depends(get_db)) -> HealthResponse:
     try:

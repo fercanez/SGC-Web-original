@@ -1,4 +1,5 @@
 import type { ConstruccionCartograficaItem } from "../api";
+import { geometryForCuadroDisplay } from "./cuadroConstruccion";
 import {
   buildInitialOpacity,
   buildInitialVisibility,
@@ -14,15 +15,16 @@ import {
   buildPredioMeasurementsGeoJSON,
   cotaOffsetMetersForZoom,
 } from "../utils/predioMeasurements";
-import { measureGeoJSON, type MeasureMode } from "../utils/mapSnap";
+import { buildFreeMeasureLayersGeoJSON, type MeasureMode } from "../utils/mapSnap";
 
 export function buildCuadroMeasurementsGeoJSON(
   geometry: GeoJSON.Geometry,
   zoom: number
 ): GeoJSON.FeatureCollection {
-  const center = centroidFromGeometry(geometry);
+  const displayGeom = geometryForCuadroDisplay(geometry) ?? geometry;
+  const center = centroidFromGeometry(displayGeom);
   const lat = center?.[1] ?? 32.624639;
-  return buildPredioMeasurementsGeoJSON(geometry, {
+  return buildPredioMeasurementsGeoJSON(displayGeom, {
     cotaOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 16),
     vertexOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 10),
   });
@@ -31,29 +33,9 @@ export function buildCuadroMeasurementsGeoJSON(
 export function buildFreeMeasureDisplayGeoJSON(
   points: GeoJSON.Position[],
   mode: MeasureMode,
-  zoom: number
+  _zoom: number
 ): GeoJSON.FeatureCollection {
-  if (mode === "polygon" && points.length >= 3) {
-    const ring = [...points, points[0]];
-    const geom: GeoJSON.Polygon = { type: "Polygon", coordinates: [ring] };
-    const center = centroidFromGeometry(geom);
-    const lat = center?.[1] ?? 32.624639;
-    return buildPredioMeasurementsGeoJSON(geom, {
-      cotaOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 14),
-      vertexOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 8),
-    });
-  }
-  const base = measureGeoJSON(points, mode);
-  if (mode === "line" && points.length >= 2) {
-    for (let i = 0; i < points.length - 1; i++) {
-      base.features.push({
-        type: "Feature",
-        properties: { kind: "edge" },
-        geometry: { type: "LineString", coordinates: [points[i], points[i + 1]] },
-      });
-    }
-  }
-  return base;
+  return buildFreeMeasureLayersGeoJSON(points, mode);
 }
 
 export function construccionesVectorFeatureCollection(

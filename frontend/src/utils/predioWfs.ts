@@ -1,7 +1,7 @@
 import type { PublicConfig } from "../types/config";
 import { isWgs84Geometry } from "./geometry";
 
-const DEFAULT_LAYER = "catastro_bc:predios_oficial";
+const DEFAULT_LAYER = "geonode:prediosmxli";
 
 function wfsPathForLayer(layer: string): string {
   const workspace = layer.includes(":") ? layer.split(":")[0] : "catastro_bc";

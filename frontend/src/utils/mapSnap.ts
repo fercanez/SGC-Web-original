@@ -1,5 +1,7 @@
 /** Puntos de snap y medición libre (ficha Construcción). */
 
+import { measurePolygonUtmMetrics } from "./cuadroConstruccion";
+
 export type MeasureMode = "off" | "line" | "polygon";
 
 function ringVertices(geometry: GeoJSON.Geometry): GeoJSON.Position[] {
@@ -81,44 +83,114 @@ export function measureGeoJSON(
   points: GeoJSON.Position[],
   mode: MeasureMode
 ): GeoJSON.FeatureCollection {
-  if (points.length < 2 || mode === "off") {
+  return buildFreeMeasureLayersGeoJSON(points, mode);
+}
+
+function midpoint(a: GeoJSON.Position, b: GeoJSON.Position): [number, number] {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+}
+
+function edgeTextRotateDeg(a: GeoJSON.Position, b: GeoJSON.Position): number {
+  const r = 6378137;
+  const x1 = (a[0] * Math.PI * r) / 180;
+  const y1 = r * Math.log(Math.tan(Math.PI / 4 + (a[1] * Math.PI) / 360));
+  const x2 = (b[0] * Math.PI * r) / 180;
+  const y2 = r * Math.log(Math.tan(Math.PI / 4 + (b[1] * Math.PI) / 360));
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (Math.hypot(dx, dy) < 1e-6) return 0;
+  let rotate = -(Math.atan2(dy, dx) * 180) / Math.PI;
+  while (rotate > 90) rotate -= 180;
+  while (rotate < -90) rotate += 180;
+  return rotate;
+}
+
+function ringCentroid(points: GeoJSON.Position[]): [number, number] {
+  let lng = 0;
+  let lat = 0;
+  for (const p of points) {
+    lng += p[0];
+    lat += p[1];
+  }
+  return [lng / points.length, lat / points.length];
+}
+
+/** Capas free-measure: vértices, aristas, cotas y resumen de área (polígono). */
+export function buildFreeMeasureLayersGeoJSON(
+  points: GeoJSON.Position[],
+  mode: MeasureMode
+): GeoJSON.FeatureCollection {
+  if (!points.length || mode === "off") {
     return { type: "FeatureCollection", features: [] };
   }
+
+  const features: GeoJSON.Feature[] = [];
+
+  for (const p of points) {
+    features.push({
+      type: "Feature",
+      properties: { kind: "vertex-dot" },
+      geometry: { type: "Point", coordinates: p },
+    });
+  }
+
+  const segments: [GeoJSON.Position, GeoJSON.Position][] = [];
   if (mode === "line") {
-    return {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { kind: "measure" },
-          geometry: { type: "LineString", coordinates: points },
-        },
-      ],
-    };
-  }
-  if (points.length >= 3) {
-    const ring = [...points, points[0]];
-    return {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { kind: "measure" },
-          geometry: { type: "Polygon", coordinates: [ring] },
-        },
-      ],
-    };
-  }
-  return {
-    type: "FeatureCollection",
-    features: [
-      {
+    for (let i = 0; i < points.length - 1; i++) {
+      segments.push([points[i], points[i + 1]]);
+    }
+  } else if (mode === "polygon") {
+    if (points.length >= 2) {
+      for (let i = 0; i < points.length - 1; i++) {
+        segments.push([points[i], points[i + 1]]);
+      }
+    }
+    if (points.length >= 3) {
+      segments.push([points[points.length - 1], points[0]]);
+      const ring = [...points, points[0]];
+      features.push({
         type: "Feature",
-        properties: { kind: "measure" },
-        geometry: { type: "LineString", coordinates: points },
+        properties: { kind: "fill" },
+        geometry: { type: "Polygon", coordinates: [ring] },
+      });
+    }
+  }
+
+  for (const [p, q] of segments) {
+    const dist = haversineMeters(p, q);
+    features.push({
+      type: "Feature",
+      properties: { kind: "edge" },
+      geometry: { type: "LineString", coordinates: [p, q] },
+    });
+    features.push({
+      type: "Feature",
+      properties: {
+        kind: "cota",
+        label: `${dist.toFixed(2)} m`,
+        bearing: edgeTextRotateDeg(p, q),
       },
-    ],
-  };
+      geometry: { type: "Point", coordinates: midpoint(p, q) },
+    });
+  }
+
+  if (mode === "polygon" && points.length >= 3) {
+    const metrics = measurePolygonUtmMetrics(points);
+    if (metrics) {
+      features.push({
+        type: "Feature",
+        properties: {
+          kind: "area-summary",
+          label: `Área: ${metrics.area_m2.toFixed(2)} m²\nPerím.: ${metrics.perimetro_m.toFixed(2)} m`,
+          area_m2: metrics.area_m2,
+          perimetro_m: metrics.perimetro_m,
+        },
+        geometry: { type: "Point", coordinates: ringCentroid(points) },
+      });
+    }
+  }
+
+  return { type: "FeatureCollection", features };
 }
 
 export function mergeConstruccionLayer(

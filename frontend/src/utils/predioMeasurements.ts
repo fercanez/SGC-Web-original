@@ -154,11 +154,16 @@ export function buildPredioMeasurementsGeoJSON(
 
   const c = ringCentroid(ring);
   const features: GeoJSON.Feature[] = [];
+  const minEdgeM = 0.05;
+  let vertexIndex = 0;
 
   for (let i = 0; i < ring.length; i++) {
     const p = ring[i];
     const q = ring[(i + 1) % ring.length];
     const dist = haversineMeters(p, q);
+    if (dist < minEdgeM) continue;
+
+    vertexIndex += 1;
     const labelPt = outwardOffset(p, q, c, cotaOffset);
     const vertPt = vertexLabelPoint(p, c, vertexOffset);
 
@@ -186,7 +191,7 @@ export function buildPredioMeasurementsGeoJSON(
     });
     features.push({
       type: "Feature",
-      properties: { kind: "vertex-label", label: `P${i + 1}` },
+      properties: { kind: "vertex-label", label: `P${vertexIndex}` },
       geometry: { type: "Point", coordinates: vertPt },
     });
   }

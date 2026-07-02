@@ -36,9 +36,10 @@ import {
   buildPredioMeasurementsGeoJSON,
   cotaOffsetMetersForZoom,
 } from "../utils/predioMeasurements";
+import { geometryForCuadroDisplay } from "../utils/cuadroConstruccion";
 import {
   collectSnapPoints,
-  measureGeoJSON,
+  buildFreeMeasureLayersGeoJSON,
   snapToNearestVertex,
   type MeasureMode,
 } from "../utils/mapSnap";
@@ -99,9 +100,11 @@ function restackByOrder(map: maplibregl.Map, order: FichaPlanoLayerId[]) {
     "cuadro-vertices",
     "cuadro-cotas",
     "cuadro-vertex-labels",
+    "free-meas-fill",
     "free-meas-edges",
     "free-meas-vertices",
     "free-meas-cotas",
+    "free-meas-area",
     "free-meas-vertex-labels",
     "highlight-clave-label",
   ];
@@ -138,9 +141,10 @@ function buildCuadroMeasurements(
   geometry: GeoJSON.Geometry,
   zoom: number
 ): GeoJSON.FeatureCollection {
-  const center = centroidFromGeometry(geometry);
+  const displayGeom = geometryForCuadroDisplay(geometry) ?? geometry;
+  const center = centroidFromGeometry(displayGeom);
   const lat = center?.[1] ?? 32.624639;
-  return buildPredioMeasurementsGeoJSON(geometry, {
+  return buildPredioMeasurementsGeoJSON(displayGeom, {
     cotaOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 16),
     vertexOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 10),
   });
@@ -149,31 +153,9 @@ function buildCuadroMeasurements(
 function buildFreeMeasureDisplay(
   points: GeoJSON.Position[],
   mode: MeasureMode,
-  zoom: number
+  _zoom: number
 ): GeoJSON.FeatureCollection {
-  if (mode === "polygon" && points.length >= 3) {
-    const ring = [...points, points[0]];
-    const geom: GeoJSON.Polygon = { type: "Polygon", coordinates: [ring] };
-    const center = centroidFromGeometry(geom);
-    const lat = center?.[1] ?? 32.624639;
-    return buildPredioMeasurementsGeoJSON(geom, {
-      cotaOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 14),
-      vertexOffsetMeters: cotaOffsetMetersForZoom(lat, zoom, 8),
-    });
-  }
-  const base = measureGeoJSON(points, mode);
-  if (mode === "line" && points.length >= 2) {
-    for (let i = 0; i < points.length - 1; i++) {
-      const p = points[i];
-      const q = points[i + 1];
-      base.features.push({
-        type: "Feature",
-        properties: { kind: "edge" },
-        geometry: { type: "LineString", coordinates: [p, q] },
-      });
-    }
-  }
-  return base;
+  return buildFreeMeasureLayersGeoJSON(points, mode);
 }
 
 function construccionesVectorFc(
@@ -470,6 +452,16 @@ export default function FichaConstruccionMap({
         },
       },
       {
+        id: "free-meas-fill",
+        type: "fill",
+        source: "free-measure",
+        filter: ["==", ["get", "kind"], "fill"],
+        paint: {
+          "fill-color": "#2563eb",
+          "fill-opacity": 0.18,
+        },
+      },
+      {
         id: "free-meas-edges",
         type: "line",
         source: "free-measure",
@@ -509,6 +501,25 @@ export default function FichaConstruccionMap({
         paint: {
           "text-color": "#ffffff",
           "text-halo-color": "#dc2626",
+          "text-halo-width": 2.5,
+        },
+      },
+      {
+        id: "free-meas-area",
+        type: "symbol",
+        source: "free-measure",
+        filter: ["==", ["get", "kind"], "area-summary"],
+        layout: {
+          "text-field": ["get", "label"],
+          "text-font": LABEL_FONT,
+          "text-size": 12,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "text-anchor": "center",
+        },
+        paint: {
+          "text-color": "#1e3a8a",
+          "text-halo-color": "#ffffff",
           "text-halo-width": 2.5,
         },
       },
@@ -613,14 +624,42 @@ export default function FichaConstruccionMap({
   const handleMapClick = useCallback(
     (e: maplibregl.MapMouseEvent) => {
       if (!measureEnabled || measureMode === "off") return;
+      e.preventDefault();
       let pt: GeoJSON.Position = [e.lngLat.lng, e.lngLat.lat];
       if (snapEnabled) {
         pt = snapToNearestVertex(pt, snapPointsRef.current, 12);
+      }
+      const last = measurePoints[measurePoints.length - 1];
+      if (last) {
+        const dx = (pt[0] - last[0]) * 111320 * Math.cos((pt[1] * Math.PI) / 180);
+        const dy = (pt[1] - last[1]) * 111320;
+        if (Math.hypot(dx, dy) < 0.05) return;
       }
       onMeasurePointsChange([...measurePoints, pt]);
     },
     [measureEnabled, measureMode, snapEnabled, measurePoints, onMeasurePointsChange]
   );
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const active = measureEnabled && measureMode !== "off";
+    const canvas = map.getCanvas();
+    if (active) {
+      map.dragPan.disable();
+      map.doubleClickZoom.disable();
+      canvas.style.cursor = "crosshair";
+    } else {
+      map.dragPan.enable();
+      map.doubleClickZoom.enable();
+      canvas.style.cursor = "";
+    }
+    return () => {
+      map.dragPan.enable();
+      map.doubleClickZoom.enable();
+      canvas.style.cursor = "";
+    };
+  }, [mapReady, measureEnabled, measureMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -721,13 +760,16 @@ export default function FichaConstruccionMap({
 
       const fOp = freeMeasureVisible && !measureHidden ? freeMeasureOpacity : 0;
       for (const id of [
+        "free-meas-fill",
         "free-meas-edges",
         "free-meas-vertices",
         "free-meas-cotas",
+        "free-meas-area",
         "free-meas-vertex-labels",
       ]) {
         if (!hasLayer(map, id)) continue;
-        if (id === "free-meas-edges") map.setPaintProperty(id, "line-opacity", fOp);
+        if (id === "free-meas-fill") map.setPaintProperty(id, "fill-opacity", fOp * 0.18);
+        else if (id === "free-meas-edges") map.setPaintProperty(id, "line-opacity", fOp);
         else if (id === "free-meas-vertices") map.setPaintProperty(id, "circle-opacity", fOp);
         else map.setPaintProperty(id, "text-opacity", fOp);
       }
@@ -869,7 +911,9 @@ export default function FichaConstruccionMap({
           {measureEnabled && measureMode !== "off" && (
             <div className="ficha-medicion-panel" role="region" aria-label="Medición">
               <strong>Medición</strong>
-              <p className="ficha-medicion-hint">Clic en el mapa para agregar vértices.</p>
+              <p className="ficha-medicion-hint">
+              Clic en el mapa para agregar vértices. Rueda del mouse para zoom.
+            </p>
             </div>
           )}
           <div className="ficha-construccion-coords">{cursorLabel}</div>
@@ -901,7 +945,9 @@ export default function FichaConstruccionMap({
         {measureEnabled && measureMode !== "off" && (
           <div className="ficha-medicion-panel" role="region" aria-label="Medición">
             <strong>Medición</strong>
-            <p className="ficha-medicion-hint">Clic en el mapa para agregar vértices.</p>
+            <p className="ficha-medicion-hint">
+              Clic en el mapa para agregar vértices. Rueda del mouse para zoom.
+            </p>
           </div>
         )}
         <div className="ficha-construccion-coords">{cursorLabel}</div>

@@ -150,6 +150,7 @@ export default function DashboardPage() {
     useState<GeoJSON.Geometry | null>(null);
   const [highlightLabel, setHighlightLabel] = useState<string | null>(null);
   const [geometrySource, setGeometrySource] = useState<string | null>(null);
+  const [geometryWfsLayer, setGeometryWfsLayer] = useState<string | null>(null);
   const [geometryLoading, setGeometryLoading] = useState(false);
   const [searchHighlights, setSearchHighlights] =
     useState<GeoJSON.FeatureCollection | null>(null);
@@ -518,11 +519,13 @@ export default function DashboardPage() {
   function applyHighlightGeometry(
     geom: GeoJSON.Geometry,
     clave: string,
-    source: string
+    source: string,
+    wfsLayer?: string | null
   ) {
     setHighlightGeometry(geom);
     setHighlightLabel(clave);
     setGeometrySource(source);
+    setGeometryWfsLayer(wfsLayer ?? null);
     setMapFitNonce((n) => n + 1);
   }
 
@@ -545,6 +548,7 @@ export default function DashboardPage() {
     setSelectedId(null);
     setHighlightGeometry(null);
     setHighlightLabel(null);
+    setGeometryWfsLayer(null);
     setGeometryLoading(true);
 
     let linkMismatch = false;
@@ -595,7 +599,8 @@ export default function DashboardPage() {
         applyHighlightGeometry(
           mapGeo.geometry,
           activeRecord.clave_catastral,
-          mapGeo.source ?? "geonode_wfs"
+          mapGeo.source ?? "geonode_wfs",
+          mapGeo.wfs_layer
         );
         if (mapGeo.note) setSearchError(mapGeo.note);
       } else if (wfsDirect) {
@@ -1038,6 +1043,8 @@ export default function DashboardPage() {
           geometry={fichaMapGeometry}
           geometryClave={fichaMapClave}
           geometryLoading={fichaGeometryLoading}
+          geometrySource={geometrySource}
+          geometryWfsLayer={geometryWfsLayer}
           dibujadoEnMapa={dibujadoEnMapa}
           currency={currency}
           geonodeLayers={geonodeLayers}

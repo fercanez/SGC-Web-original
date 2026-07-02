@@ -1,11 +1,17 @@
 const DEFAULT_TIMEOUT_MS = 25_000;
 
 export class FetchTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(
+  constructor(timeoutMs: number, cause?: unknown) {
+    const base =
       `El servidor no respondió en ${Math.round(timeoutMs / 1000)} segundos. ` +
-        "Verifique que sgc-web-api esté activo e intente de nuevo."
-    );
+      "Verifique en el servidor: " +
+      "`sudo systemctl status sgc-web-api` y " +
+      "`curl -s http://127.0.0.1:9100/api/v1/health/live`.";
+    const hint =
+      cause instanceof TypeError
+        ? " No hay conexión con la API (revisar Apache/proxy o que el servicio esté activo)."
+        : "";
+    super(base + hint);
     this.name = "FetchTimeoutError";
   }
 }
@@ -32,7 +38,7 @@ export async function fetchWithTimeout(
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new FetchTimeoutError(timeoutMs);
+      throw new FetchTimeoutError(timeoutMs, err);
     }
     throw err;
   } finally {

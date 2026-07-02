@@ -930,8 +930,9 @@ body.ficha-workspace-resizing .ficha-resize-s {
   height: 100%;
 }
 
-.ficha-construccion-map--measuring {
-  cursor: crosshair;
+.ficha-construccion-map--measuring,
+.ficha-construccion-map--measuring .maplibregl-canvas {
+  cursor: crosshair !important;
 }
 
 .ficha-medicion-panel {
@@ -961,6 +962,16 @@ body.ficha-workspace-resizing .ficha-resize-s {
   color: #6b7280;
   font-size: 10px;
   line-height: 1.35;
+}
+
+.ficha-medicion-polygon-stats {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #374151;
+}
+
+.ficha-medicion-polygon-stats strong {
+  color: #1e3a8a;
 }
 
 .ficha-construccion-coords {

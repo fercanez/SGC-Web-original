@@ -7,6 +7,7 @@ import {
 import type { GeonodeLayer, PublicConfig } from "../types/config";
 import {
   buildCuadroConstruccionUtm,
+  measurePolygonUtmMetrics,
   type CuadroConstruccionResult,
   type CuadroVertex,
 } from "../utils/cuadroConstruccion";
@@ -23,6 +24,8 @@ interface Props {
   geometry: GeoJSON.Geometry | null;
   geometryClave?: string | null;
   geometryLoading?: boolean;
+  geometrySource?: string | null;
+  geometryWfsLayer?: string | null;
   geonodeLayers: GeonodeLayer[];
   wmsPath: string;
   construccionesConfig?: PublicConfig["construcciones"];
@@ -45,6 +48,8 @@ export default function FichaConstruccionTab({
   geometry,
   geometryClave,
   geometryLoading = false,
+  geometrySource = null,
+  geometryWfsLayer = null,
   geonodeLayers,
   wmsPath,
   construccionesConfig,
@@ -66,7 +71,7 @@ export default function FichaConstruccionTab({
   const [constrMessage, setConstrMessage] = useState<string | null>(null);
 
   const [measureEnabled, setMeasureEnabled] = useState(true);
-  const [measureMode, setMeasureMode] = useState<MeasureMode>("polygon");
+  const [measureMode, setMeasureMode] = useState<MeasureMode>("off");
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [measureHidden, setMeasureHidden] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<GeoJSON.Position[]>([]);
@@ -75,6 +80,28 @@ export default function FichaConstruccionTab({
   const geometryReady =
     geometry &&
     (!geometryClave || geometryClave === clave);
+
+  const geometrySourceLabel = useMemo(() => {
+    if (!geometryReady) return null;
+    if (geometryWfsLayer) {
+      return `WFS ${geometryWfsLayer}`;
+    }
+    if (geometrySource === "geonode_wfs" || geometrySource === "wfs_direct") {
+      return "WFS GeoNode (capa predios)";
+    }
+    if (geometrySource === "database_sync" || geometrySource === "database_parcel") {
+      return "PostgreSQL (sync previo)";
+    }
+    if (geometrySource === "search_batch" || geometrySource === "wfs_fallback") {
+      return "Respaldo búsqueda / WFS";
+    }
+    return geometrySource ? String(geometrySource) : null;
+  }, [geometryReady, geometrySource, geometryWfsLayer]);
+
+  const measurePolygonStats = useMemo(() => {
+    if (measureMode !== "polygon" || measurePoints.length < 3) return null;
+    return measurePolygonUtmMetrics(measurePoints);
+  }, [measureMode, measurePoints]);
 
   useEffect(() => {
     if (!geometryReady || !geometry) {
@@ -257,6 +284,12 @@ export default function FichaConstruccionTab({
             <p className="ficha-construccion-foot">
               EPSG:{cuadro.srid} (UTM) · Área {fmtNum(cuadro.area_m2, 2, " m²")} · Perímetro{" "}
               {fmtNum(cuadro.perimetro_m, 2, " m")}
+              {geometrySourceLabel && (
+                <>
+                  <br />
+                  Origen geometría: {geometrySourceLabel}
+                </>
+              )}
             </p>
           </div>
         )}
@@ -306,7 +339,11 @@ export default function FichaConstruccionTab({
               <input
                 type="checkbox"
                 checked={measureEnabled}
-                onChange={(e) => setMeasureEnabled(e.target.checked)}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setMeasureEnabled(on);
+                  if (on && measureMode === "off") setMeasureMode("line");
+                }}
               />
               Medición
             </label>
@@ -374,6 +411,13 @@ export default function FichaConstruccionTab({
                 Quitar medición
               </button>
             </div>
+            {measurePolygonStats && (
+              <p className="ficha-medicion-polygon-stats">
+                Área UTM: <strong>{measurePolygonStats.area_m2.toFixed(2)} m²</strong>
+                {" · "}
+                Perímetro: <strong>{measurePolygonStats.perimetro_m.toFixed(2)} m</strong>
+              </p>
+            )}
           </div>
         )}
 

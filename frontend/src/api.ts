@@ -435,7 +435,9 @@ export interface CadastralMapGeometry {
   clave_catastral: string;
   geometry: GeoJSON.Geometry | null;
   source: "geonode_wfs" | "database_sync" | string | null;
+  wfs_layer?: string | null;
   wfs_feature_count?: number;
+  vertex_count?: number | null;
   database_cadastral_code?: string | null;
   note?: string | null;
 }

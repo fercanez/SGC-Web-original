@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import SessionLocal
 from app.routers import (
     auth,
     cadastral,
@@ -26,17 +25,18 @@ from app.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #db = SessionLocal()
-    #try:
-     #   init_postgis(db)
-    #finally:
-     #   db.close()
+    # Aceptar peticiones de inmediato; el seed no debe bloquear login/health.
     if settings.seed_on_startup:
-        from app.auth.seed_auth import run_auth_seed
-        from app.seed import run_seed
+        import asyncio
 
-        run_auth_seed()
-        run_seed()
+        async def _seed() -> None:
+            from app.auth.seed_auth import run_auth_seed
+            from app.seed import run_seed
+
+            await asyncio.to_thread(run_auth_seed)
+            await asyncio.to_thread(run_seed)
+
+        asyncio.create_task(_seed())
     yield
 
 

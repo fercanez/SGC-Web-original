@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     geonode_ssl_verify: bool = False
 
     # Capa vectorial oficial (origen cartográfico y de datos)
-    geonode_source_layer: str = "catastro_bc:predios_oficial"
+    geonode_source_layer: str = "geonode:prediosmxli"
     geonode_source_title: str = "Predios Mexicali (origen oficial)"
     geonode_source_srid: int = 4326
     skip_demo_when_source_layer: bool = True

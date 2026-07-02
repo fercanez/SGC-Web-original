@@ -22,6 +22,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     username = payload.username.strip().lower()
 
     try:
+        db.execute(text("SET LOCAL statement_timeout = 8000"))
         row = db.execute(
             text("""
                 SELECT

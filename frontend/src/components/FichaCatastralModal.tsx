@@ -49,6 +49,8 @@ interface Props {
   geometry: GeoJSON.Geometry | null;
   geometryClave?: string | null;
   geometryLoading?: boolean;
+  geometrySource?: string | null;
+  geometryWfsLayer?: string | null;
   dibujadoEnMapa: boolean;
   currency: string;
   geonodeLayers?: GeonodeLayer[];
@@ -312,6 +314,8 @@ export default function FichaCatastralModal({
   geometry,
   geometryClave = null,
   geometryLoading = false,
+  geometrySource = null,
+  geometryWfsLayer = null,
   dibujadoEnMapa,
   currency,
   geonodeLayers = [],
@@ -512,6 +516,8 @@ export default function FichaCatastralModal({
               geometry={geometry}
               geometryClave={geometryClave}
               geometryLoading={geometryLoading}
+              geometrySource={geometrySource}
+              geometryWfsLayer={geometryWfsLayer}
               geonodeLayers={fichaGeonodeLayers}
               wmsPath={wmsPath}
               construccionesConfig={construccionesConfig}
