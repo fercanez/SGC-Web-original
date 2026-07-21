@@ -185,15 +185,13 @@ async def fetch_wfs_geojson(
 ) -> dict:
     params = {
         "service": "WFS",
-        "version": "2.0.0",
+        "version": "1.0.0",
         "request": "GetFeature",
-        "typeNames": type_name,
+        "typeName": type_name,
         "outputFormat": "application/json",
         "srsName": f"EPSG:{settings.metric_srid}",
-        "count": str(max_features),
-        "startIndex": str(start_index),
-        "sortBy": "id",
-}
+        "maxFeatures": str(max_features),
+    }
     resp = await fetch_wfs(params, timeout=timeout, layer=type_name)
     resp.raise_for_status()
     payload = resp.json()

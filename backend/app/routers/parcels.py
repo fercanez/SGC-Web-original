@@ -2,6 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_permission
@@ -18,26 +19,29 @@ def list_parcels(
     db: Session = Depends(get_db),
     _=Depends(require_permission(Permission.PARCELS_READ.value)),
 ):
-    rows = db.execute(
-        text("""
-            SELECT
-                id::text AS id,
-                clave_catastral AS cadastral_code,
-                clave_catastral AS predial_account,
-                cp AS postal_code,
-                numof,
-                numint,
-                letra,
-                sup_documental AS area_m2,
-                estatus AS status,
-                valor2026 AS cadastral_value
-            FROM catastro.predios
-            WHERE vigente IS TRUE
-            ORDER BY id
-            LIMIT :limit OFFSET :skip
-        """),
-        {"limit": limit, "skip": skip},
-    ).mappings().all()
+    try:
+        rows = db.execute(
+            text("""
+                SELECT
+                    id::text AS id,
+                    clave_catastral AS cadastral_code,
+                    clave_catastral AS predial_account,
+                    cp AS postal_code,
+                    numof,
+                    numint,
+                    letra,
+                    sup_documental AS area_m2,
+                    estatus AS status,
+                    valor2026 AS cadastral_value
+                FROM catastro.predios
+                WHERE vigente IS TRUE
+                ORDER BY id
+                LIMIT :limit OFFSET :skip
+            """),
+            {"limit": limit, "skip": skip},
+        ).mappings().all()
+    except SQLAlchemyError:
+        return []
 
     return [
         {
@@ -71,26 +75,29 @@ def parcels_geojson(
     db: Session = Depends(get_db),
     _=Depends(require_permission(Permission.PARCELS_READ.value)),
 ):
-    rows = db.execute(
-        text("""
-            SELECT
-                id::text AS id,
-                clave_catastral,
-                cp,
-                numof,
-                numint,
-                letra,
-                sup_documental,
-                estatus,
-                valor2026,
-                ST_AsGeoJSON(ST_Transform(geom, 4326)) AS geom_json
-            FROM catastro.predios
-            WHERE vigente IS TRUE
-              AND geom IS NOT NULL
-            ORDER BY id
-            LIMIT 5000
-        """)
-    ).mappings().all()
+    try:
+        rows = db.execute(
+            text("""
+                SELECT
+                    id::text AS id,
+                    clave_catastral,
+                    cp,
+                    numof,
+                    numint,
+                    letra,
+                    sup_documental,
+                    estatus,
+                    valor2026,
+                    ST_AsGeoJSON(ST_Transform(geom, 4326)) AS geom_json
+                FROM catastro.predios
+                WHERE vigente IS TRUE
+                  AND geom IS NOT NULL
+                ORDER BY id
+                LIMIT 5000
+            """)
+        ).mappings().all()
+    except SQLAlchemyError:
+        return {"type": "FeatureCollection", "features": []}
 
     features = []
     for r in rows:
@@ -125,29 +132,32 @@ def get_parcel(
     db: Session = Depends(get_db),
     _=Depends(require_permission(Permission.PARCELS_READ.value)),
 ):
-    row = db.execute(
-        text("""
-            SELECT
-                id::text AS id,
-                clave_catastral,
-                cp,
-                numof,
-                numint,
-                letra,
-                sup_documental,
-                sup_fisica,
-                sup_const,
-                estatus,
-                valor2026,
-                vigente,
-                fecha_alta,
-                ST_AsGeoJSON(ST_Transform(geom, 4326)) AS geom_json
-            FROM catastro.predios
-            WHERE id::text = :id
-            LIMIT 1
-        """),
-        {"id": parcel_id},
-    ).mappings().first()
+    try:
+        row = db.execute(
+            text("""
+                SELECT
+                    id::text AS id,
+                    clave_catastral,
+                    cp,
+                    numof,
+                    numint,
+                    letra,
+                    sup_documental,
+                    sup_fisica,
+                    sup_const,
+                    estatus,
+                    valor2026,
+                    vigente,
+                    fecha_alta,
+                    ST_AsGeoJSON(ST_Transform(geom, 4326)) AS geom_json
+                FROM catastro.predios
+                WHERE id::text = :id
+                LIMIT 1
+            """),
+            {"id": parcel_id},
+        ).mappings().first()
+    except SQLAlchemyError:
+        raise HTTPException(status_code=404, detail="Predio no disponible")
 
     if not row:
         raise HTTPException(status_code=404, detail="Predio no encontrado")

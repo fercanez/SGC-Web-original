@@ -1,13 +1,8 @@
 /**
  * URL base de la API.
  *
- * En producción SGC-Web consume la API publicada
- * por Apache en:
- *
- *   https://fcnarqnodo.hopto.org/sgc-web-api/
- *
- * Por eso devolvemos siempre /sgc-web-api.
+ * Usa VITE_API_URL cuando está definida; si no, cae al backend local.
  */
 export function getApiUrl(): string {
-  return "/sgc-web-api";
+  return import.meta.env.VITE_API_URL || "/api";
 }

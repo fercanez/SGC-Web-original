@@ -17,6 +17,7 @@ from app.routers import (
     roles,
     expediente,
     fiscal,
+    predial,
     movimientos,
     source,
     users,
@@ -70,6 +71,7 @@ app.include_router(fiscal.router, prefix="/api/v1")
 app.include_router(import_data.router, prefix="/api/v1")
 app.include_router(cadastral.router, prefix="/api/v1")
 app.include_router(cadastral.map_pick_router, prefix="/api/v1")
+app.include_router(predial.router, prefix="/api/v1")
 app.include_router(catalogs.router, prefix="/api/v1")
 app.include_router(parties.router, prefix="/api/v1")
 app.include_router(parcels.router, prefix="/api/v1")

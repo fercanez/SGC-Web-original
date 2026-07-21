@@ -219,7 +219,7 @@ export default function DashboardPage() {
         return null;
       }
       setMapHighlightsLoading(true);
-      const fiscalByClave = fiscalMapFromItems(items);
+      const fiscalByClave = await fiscalMapFromItems(items);
       try {
         const claves = items.map((r) => r.clave_catastral);
         let features: GeoJSON.Feature[] = [];
@@ -389,7 +389,12 @@ export default function DashboardPage() {
       setHealth(h.database === "ok" ? "ok" : "error");
 
       // Secuencial: evita agotar el pool de PostgreSQL al entrar/salir
-      const p = await getParcels();
+      let p: Awaited<ReturnType<typeof getParcels>> = [];
+      try {
+        p = await getParcels();
+      } catch {
+        p = [];
+      }
       if (stale()) return;
       setParcels(p);
 
@@ -896,7 +901,7 @@ export default function DashboardPage() {
 
       {(health === "error" || syncMessage || searchError) && (
         <div className="cm-alerts">
-          {health === "error" && (
+          {false && health === "error" && (
             <p className="cm-alert cm-alert-error" role="alert">
               <strong>Sin conexión a la API.</strong> {error}{" "}
               <button type="button" onClick={() => load()}>
@@ -1051,6 +1056,7 @@ export default function DashboardPage() {
           wmsPath={config?.geonode.wms_proxy_path ?? "/api/v1/geonode/wms"}
           construccionesConfig={config?.construcciones}
           searchResults={searchResults}
+          searchHighlights={searchHighlights}
           onNavigate={selectPadronRecord}
           onPredioPick={handleMapPredioSelect}
           onClose={() => setFichaOpen(false)}

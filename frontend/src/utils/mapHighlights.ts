@@ -1,27 +1,50 @@
 import {
   getCadastralMapGeometry,
   getParcel,
+  getPredialAdeudo,
   type PredioAlfanumericoRecord,
 } from "../api";
-import {
-  fiscalStatusFromAdeudos,
-  type FiscalStatus,
-} from "./fiscal";
+import { type FiscalStatus } from "./fiscal";
 import { normalizeCadastralCode } from "./geometry";
 
 const FALLBACK_MAX = 40;
 const FALLBACK_CHUNK = 5;
 
-export function fiscalMapFromItems(
-  items: PredioAlfanumericoRecord[]
-): Map<string, FiscalStatus> {
-  const map = new Map<string, FiscalStatus>();
-  for (const r of items) {
-    map.set(
-      normalizeCadastralCode(r.clave_catastral),
-      fiscalStatusFromAdeudos(r.adeudo_2026, r.adeudo_total)
-    );
+function fiscalFromPredialResult(result: {
+  estatus_consulta?: string;
+  total_a_pagar?: number;
+} | null | undefined): FiscalStatus {
+  if (!result) return "sin_adeudo";
+  if (
+    result.estatus_consulta === "con_adeudo" ||
+    Number(result.total_a_pagar ?? 0) > 0
+  ) {
+    return "con_adeudo";
   }
+  return "sin_adeudo";
+}
+
+export async function fiscalMapFromItems(
+  items: PredioAlfanumericoRecord[]
+): Promise<Map<string, FiscalStatus>> {
+  const map = new Map<string, FiscalStatus>();
+
+  const results = await Promise.all(
+    items.map(async (r) => {
+      const clave = normalizeCadastralCode(r.clave_catastral);
+      try {
+        const predial = await getPredialAdeudo(r.clave_catastral);
+        return [clave, fiscalFromPredialResult(predial)] as const;
+      } catch {
+        return [clave, "sin_adeudo" as FiscalStatus] as const;
+      }
+    })
+  );
+
+  for (const [clave, fiscal] of results) {
+    map.set(clave, fiscal);
+  }
+
   return map;
 }
 
@@ -34,7 +57,7 @@ export function applyFiscalToFeatures(
     const fiscal =
       fiscalByClave.get(clave) ??
       (f.properties?.fiscal as FiscalStatus | undefined) ??
-      "sin_dato";
+      "sin_adeudo";
     return {
       ...f,
       properties: {
@@ -72,7 +95,7 @@ export function findGeometryInSearch(
 export async function fetchGeometriesFromParcels(
   items: PredioAlfanumericoRecord[]
 ): Promise<GeoJSON.Feature[]> {
-  const fiscalByClave = fiscalMapFromItems(items);
+  const fiscalByClave = await fiscalMapFromItems(items);
   const slice = items.filter((r) => r.parcel_id).slice(0, 40);
   const features: GeoJSON.Feature[] = [];
 
@@ -90,7 +113,7 @@ export async function fetchGeometriesFromParcels(
             properties: {
               clave,
               clave_norm: clave,
-              fiscal: fiscalByClave.get(clave) ?? "sin_dato",
+              fiscal: fiscalByClave.get(clave) ?? "sin_adeudo",
             },
             geometry: p.geometry,
           };
@@ -124,7 +147,7 @@ export async function fetchMapGeometriesFallback(
   items: PredioAlfanumericoRecord[]
 ): Promise<GeoJSON.Feature[]> {
   const slice = items.slice(0, FALLBACK_MAX);
-  const fiscalByClave = fiscalMapFromItems(slice);
+  const fiscalByClave = await fiscalMapFromItems(slice);
   const features: GeoJSON.Feature[] = [];
 
   for (let i = 0; i < slice.length; i += FALLBACK_CHUNK) {
@@ -140,7 +163,7 @@ export async function fetchMapGeometriesFallback(
             properties: {
               clave,
               clave_norm: clave,
-              fiscal: fiscalByClave.get(clave) ?? "sin_dato",
+              fiscal: fiscalByClave.get(clave) ?? "sin_adeudo",
             },
             geometry: geo.geometry,
           };

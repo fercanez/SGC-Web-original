@@ -1,6 +1,5 @@
 # SGC-Web — usa PostgreSQL ya instalado en la VM (GeoNode / catastro_lab).
 # El puerto 5432 del host NO se expone de nuevo (evita conflicto con GeoNode).
-
 services:
   api:
     build: ./backend
@@ -12,14 +11,14 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://192.168.116.132:5173,http://localhost:5173,http://127.0.0.1:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS}
       SEED_ON_STARTUP: ${SEED_ON_STARTUP:-true}
       MUNICIPALITY_NAME: ${MUNICIPALITY_NAME:-Mexicali}
       STATE_NAME: ${STATE_NAME:-Baja California}
       DEFAULT_MAP_CENTER_LON: ${DEFAULT_MAP_CENTER_LON:--115.468278}
       DEFAULT_MAP_CENTER_LAT: ${DEFAULT_MAP_CENTER_LAT:-32.624639}
       METRIC_SRID: ${METRIC_SRID:-32611}
-      GEONODE_URL: ${GEONODE_URL:-http://192.168.116.132}
+      GEONODE_URL: ${GEONODE_URL}
       GEOSERVER_PATH: ${GEOSERVER_PATH:-/geoserver}
       GEONODE_USER: ${GEONODE_USER:-}
       GEONODE_PASSWORD: ${GEONODE_PASSWORD:-}
@@ -34,7 +33,7 @@ services:
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Admin123!}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/api/v1/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -48,7 +47,7 @@ services:
       - .env
     environment:
       VITE_API_PROXY_TARGET: http://api:8000
-      VITE_API_URL: ${VITE_API_URL:-http://192.168.116.132:8000}
+      VITE_API_URL: /api
     depends_on:
       - api
     restart: unless-stopped

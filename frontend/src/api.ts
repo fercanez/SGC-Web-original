@@ -3,6 +3,7 @@ import { getApiUrl } from "./config/apiUrl";
 import { clearToken, getToken } from "./auth/storage";
 import type { UserInfo } from "./types/auth";
 import type { PublicConfig } from "./types/config";
+import type { PredialAdeudoResponse } from "./types/predial";
 
 export interface ParcelSummary {
   id: string;
@@ -72,19 +73,19 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export function getParcels(): Promise<ParcelSummary[]> {
-  return fetchJson("/api/v1/parcels");
+  return fetchJson("/v1/parcels");
 }
 
 export function getParcelsGeoJSON(): Promise<GeoJSONFeatureCollection> {
-  return fetchJson("/api/v1/parcels/geojson");
+  return fetchJson("/v1/parcels/geojson");
 }
 
 export function getParties(): Promise<PartySummary[]> {
-  return fetchJson("/api/v1/parties");
+  return fetchJson("/v1/parties");
 }
 
 export function getParcelOwnerships(id: string): Promise<OwnershipRow[]> {
-  return fetchJson(`/api/v1/parcels/${id}/ownerships`);
+  return fetchJson(`/v1/parcels/${id}/ownerships`);
 }
 export interface PredioPropietarioItem {
   id_predio_propietario: number;
@@ -108,7 +109,7 @@ export function getPredioPropietarios(
   clave: string
 ): Promise<PredioPropietariosResponse> {
   return fetchJson(
-    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}/propietarios`
+    `/v1/cadastral/${encodeURIComponent(clave.trim())}/propietarios`
   );
 }
 
@@ -121,7 +122,7 @@ export function getPredioFolioReal(
   clave: string
 ): Promise<PredioFolioRealResponse> {
   return fetchJson(
-    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}/folio-real`
+    `/v1/cadastral/${encodeURIComponent(clave.trim())}/folio-real`
   );
 }
 
@@ -145,7 +146,7 @@ export interface CuadroConstruccionResponse {
 export function postCuadroConstruccion(
   geometry: GeoJSON.Geometry
 ): Promise<CuadroConstruccionResponse> {
-  return fetchJson("/api/v1/cadastral/cuadro-construccion", {
+  return fetchJson("/v1/cadastral/cuadro-construccion", {
     method: "POST",
     body: JSON.stringify({ geometry }),
   });
@@ -172,7 +173,7 @@ export function getPredioConstrucciones(
   clave: string
 ): Promise<PredioConstruccionesResponse> {
   return fetchJson(
-    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}/construcciones`
+    `/v1/cadastral/${encodeURIComponent(clave.trim())}/construcciones`
   );
 }
 
@@ -254,7 +255,7 @@ export function searchCadastral(
   limit = 25
 ): Promise<CadastralSearchResult> {
   const qs = new URLSearchParams({ q: q.trim(), limit: String(limit) });
-  return fetchJson(`/api/v1/cadastral/search?${qs}`);
+  return fetchJson(`/v1/cadastral/search?${qs}`);
 }
 
 function filterItemsLocal(
@@ -357,7 +358,7 @@ export async function searchCadastralAdvanced(
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.page_size ?? 500));
   try {
-    return await fetchJson(`/api/v1/cadastral/search/advanced?${qs}`);
+    return await fetchJson(`/v1/cadastral/search/advanced?${qs}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
@@ -371,7 +372,7 @@ export function getCadastralRecord(
   clave: string
 ): Promise<PredioAlfanumericoRecord> {
   return fetchJson(
-    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}`
+    `/v1/cadastral/${encodeURIComponent(clave.trim())}`
   );
 }
 
@@ -396,7 +397,7 @@ export async function getCadastralAtPoint(
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(
-    `${getApiUrl()}/api/v1/cadastral/intersecta?${qs}`,
+    `${getApiUrl()}/v1/cadastral/intersecta?${qs}`,
     { headers, cache: "no-store" }
   );
   if (res.status === 401) {
@@ -426,7 +427,7 @@ export function refreshCadastralFiscal(
   clave: string
 ): Promise<FiscalRefreshResponse> {
   return fetchJson(
-    `/api/v1/cadastral/${encodeURIComponent(clave.trim())}/fiscal/refresh`,
+    `/v1/cadastral/${encodeURIComponent(clave.trim())}/fiscal/refresh`,
     { method: "POST" }
   );
 }
@@ -454,7 +455,7 @@ export async function getCadastralMapGeometry(
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(
-    `${getApiUrl()}/api/v1/cadastral/${encodeURIComponent(norm)}/map-geometry`,
+    `${getApiUrl()}/v1/cadastral/${encodeURIComponent(norm)}/map-geometry`,
     { headers }
   );
   if (res.status === 401) {
@@ -501,22 +502,22 @@ export function postBatchMapGeometries(
   claves: string[],
   maxItems = 80
 ): Promise<BatchMapGeometriesResponse> {
-  return fetchJson("/api/v1/cadastral/map-geometries/batch", {
+  return fetchJson("/v1/cadastral/map-geometries/batch", {
     method: "POST",
     body: JSON.stringify({ claves, max_items: maxItems }),
   });
 }
 
 export function getParcel(id: string): Promise<ParcelGeoJSON> {
-  return fetchJson(`/api/v1/parcels/${id}`);
+  return fetchJson(`/v1/parcels/${id}`);
 }
 
 export function getHealth(): Promise<{ status: string; database: string }> {
-  return fetchJson("/api/v1/health");
+  return fetchJson("/v1/health");
 }
 
 export function getConfig(): Promise<PublicConfig> {
-  return fetchJson("/api/v1/config");
+  return fetchJson("/v1/config");
 }
 
 export interface GeonodeStatus {
@@ -528,7 +529,7 @@ export interface GeonodeStatus {
 }
 
 export function getGeonodeStatus(): Promise<GeonodeStatus> {
-  return fetchJson("/api/v1/geonode/status");
+  return fetchJson("/v1/geonode/status");
 }
 
 export interface SourceStatus {
@@ -552,7 +553,7 @@ export interface SyncResult {
 }
 
 export function getSourceStatus(): Promise<SourceStatus> {
-  return fetchJson("/api/v1/source/status");
+  return fetchJson("/v1/source/status");
 }
 
 export interface CatalogSummary {
@@ -566,7 +567,7 @@ export interface CatalogSummary {
 }
 
 export function getCatalogSummary(): Promise<CatalogSummary> {
-  return fetchJson("/api/v1/catalogs/summary");
+  return fetchJson("/v1/catalogs/summary");
 }
 
 export function syncFromGeonode(params?: {
@@ -579,7 +580,7 @@ export function syncFromGeonode(params?: {
   }
   if (params?.dry_run) qs.set("dry_run", "true");
   const query = qs.toString();
-  return fetchJson(`/api/v1/source/sync${query ? `?${query}` : ""}`, {
+  return fetchJson(`/v1/source/sync${query ? `?${query}` : ""}`, {
     method: "POST",
   });
 }
@@ -607,7 +608,7 @@ export interface FiscalStatus {
 }
 
 export function getFiscalStatus(): Promise<FiscalStatus> {
-  return fetchJson("/api/v1/fiscal/status");
+  return fetchJson("/v1/fiscal/status");
 }
 
 export function syncAdeudosFromGeonode(params?: {
@@ -620,17 +621,17 @@ export function syncAdeudosFromGeonode(params?: {
   }
   if (params?.dry_run) qs.set("dry_run", "true");
   const query = qs.toString();
-  return fetchJson(`/api/v1/fiscal/sync${query ? `?${query}` : ""}`, {
+  return fetchJson(`/v1/fiscal/sync${query ? `?${query}` : ""}`, {
     method: "POST",
   });
 }
 
 export function listUsers(): Promise<UserRow[]> {
-  return fetchJson("/api/v1/users");
+  return fetchJson("/v1/users");
 }
 
 export function listRoles(): Promise<RoleRow[]> {
-  return fetchJson("/api/v1/roles");
+  return fetchJson("/v1/roles");
 }
 
 export function createUser(payload: {
@@ -640,7 +641,7 @@ export function createUser(payload: {
   email?: string;
   role_code: string;
 }): Promise<UserRow> {
-  return fetchJson("/api/v1/users", {
+  return fetchJson("/v1/users", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -650,7 +651,7 @@ export function updateRolePermissions(
   roleCode: string,
   permissions: string[]
 ): Promise<RoleRow> {
-  return fetchJson(`/api/v1/roles/${roleCode}/permissions`, {
+  return fetchJson(`/v1/roles/${roleCode}/permissions`, {
     method: "PUT",
     body: JSON.stringify({ permissions }),
   });
@@ -668,7 +669,7 @@ export function getExpediente(
   clave: string
 ): Promise<ExpedienteInfo> {
   return fetchJson(
-    `/api/v1/expediente/${encodeURIComponent(clave.trim())}`
+    `/v1/expediente/${encodeURIComponent(clave.trim())}`
   );
 }
 
@@ -686,7 +687,7 @@ export function getExpedienteHistorial(
   clave: string
 ): Promise<ExpedienteHistorialItem[]> {
   return fetchJson(
-    `/api/v1/expediente/${encodeURIComponent(clave.trim())}/historial`
+    `/v1/expediente/${encodeURIComponent(clave.trim())}/historial`
   );
 }
 
@@ -703,7 +704,7 @@ export interface MovimientoSGC {
 
 export function getMovimientosSGC(clave: string): Promise<MovimientoSGC[]> {
   return fetchJson(
-    `/api/v1/movimientos/${encodeURIComponent(clave.trim())}`
+    `/v1/movimientos/${encodeURIComponent(clave.trim())}`
   );
 }
 export interface MovimientoCreatePayload {
@@ -716,7 +717,7 @@ export interface MovimientoCreatePayload {
 export function createMovimientoSGC(
   payload: MovimientoCreatePayload
 ): Promise<MovimientoSGC> {
-  return fetchJson("/api/v1/movimientos", {
+  return fetchJson("/v1/movimientos", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -731,8 +732,25 @@ export function cambiarEstadoMovimientoSGC(
   id: number,
   payload: MovimientoEstadoPayload
 ): Promise<MovimientoSGC> {
-  return fetchJson(`/api/v1/movimientos/${id}/estado`, {
+  return fetchJson(`/v1/movimientos/${id}/estado`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function getPredialAdeudo(
+  clave: string
+): Promise<PredialAdeudoResponse> {
+  return fetchJson(
+    `/v1/predial/adeudo?clave_catastral=${encodeURIComponent(clave.trim())}`
+  );
+}
+
+export function postPredialAdeudos(
+  claves: string[]
+): Promise<PredialAdeudoResponse[]> {
+  return fetchJson("/v1/predial/adeudos", {
+    method: "POST",
+    body: JSON.stringify({ claves_catastrales: claves }),
   });
 }

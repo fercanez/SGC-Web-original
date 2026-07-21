@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  getPredialAdeudo,
   getPredioFolioReal,
   getPredioPropietarios,
   type PredioAlfanumericoRecord,
@@ -16,8 +17,11 @@ import FichaMiniMap from "./FichaMiniMap";
 import FichaPrintPreview from "./FichaPrintPreview";
 import FichaConstruccionTab from "./FichaConstruccionTab";
 import type { GeonodeLayer, PublicConfig } from "../types/config";
+import type { PredialAdeudoResponse } from "../types/predial";
 import { mergeConstruccionLayer } from "../utils/mapSnap";
 import { useFichaWorkspaceResize } from "../hooks/useFichaWorkspaceResize";
+import PredialAdeudoBadge from "./predial/PredialAdeudoBadge";
+import PredialAdeudoModal from "./predial/PredialAdeudoModal";
 import "../styles/ficha-catastral.css";
 
 export type FichaCatastralTab =
@@ -57,6 +61,7 @@ interface Props {
   wmsPath?: string;
   construccionesConfig?: PublicConfig["construcciones"];
   searchResults?: PredioAlfanumericoRecord[];
+  searchHighlights?: GeoJSON.FeatureCollection | null;
   onNavigate?: (record: PredioAlfanumericoRecord) => void;
   onPredioPick?: (clave: string) => void;
   onClose: () => void;
@@ -80,6 +85,20 @@ function fiscalBadgeClass(status: FiscalStatus): string {
   if (status === "con_adeudo") return "ficha-badge-debt";
   if (status === "sin_dato") return "ficha-badge-unknown";
   return "ficha-badge-ok";
+}
+
+function fiscalFromPredialAdeudo(
+  predialAdeudo: PredialAdeudoResponse | null,
+  fallback: FiscalStatus
+): FiscalStatus {
+  if (!predialAdeudo) return fallback;
+  if (
+    predialAdeudo.estatus_consulta === "con_adeudo" ||
+    Number(predialAdeudo.total_a_pagar ?? 0) > 0
+  ) {
+    return "con_adeudo";
+  }
+  return "sin_adeudo";
 }
 
 function TabPlaceholder({ title }: { title: string }) {
@@ -111,6 +130,11 @@ function FichaDatosTab({
   wmsPath,
   onOpenPrint,
   onPredioSelect,
+  predialAdeudo,
+  predialAdeudoLoading,
+  onOpenAdeudo,
+  fiscal,
+  searchHighlights,
 }: {
   padron: PredioAlfanumericoRecord;
   geometry: GeoJSON.Geometry | null;
@@ -128,6 +152,11 @@ function FichaDatosTab({
   wmsPath: string;
   onOpenPrint: () => void;
   onPredioSelect?: (clave: string) => void;
+  predialAdeudo: PredialAdeudoResponse | null;
+  predialAdeudoLoading: boolean;
+  onOpenAdeudo: () => void;
+  fiscal: FiscalStatus;
+  searchHighlights?: GeoJSON.FeatureCollection | null;
 }) {
   const centro = useMemo(() => centroidFromGeometry(geometry), [geometry]);
   const streetViewSrc = centro
@@ -165,6 +194,31 @@ function FichaDatosTab({
   return (
     <div className="ficha-datos-layout">
       <section className="ficha-datos-col ficha-datos-form">
+        <div style={{ marginBottom: "1rem" }}>
+          <h3 style={{ marginBottom: "0.5rem" }}>Estado predial</h3>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.75rem",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <PredialAdeudoBadge
+              data={predialAdeudo}
+              loading={predialAdeudoLoading}
+            />
+            <button
+              type="button"
+              className="ficha-btn-secondary"
+              onClick={onOpenAdeudo}
+              disabled={!predialAdeudo}
+            >
+              Ver adeudos
+            </button>
+          </div>
+        </div>
+
         <table className="ficha-datos-table">
           <tbody>
             {rows.map(([label, value]) => (
@@ -237,72 +291,74 @@ function FichaDatosTab({
       </section>
 
       <div className="ficha-datos-media">
-      <section className="ficha-datos-col ficha-datos-street">
-        <h3 className="ficha-panel-title">Vista de calle</h3>
-        {geometryLoading && (
-          <div className="ficha-media-placeholder">Cargando ubicación…</div>
-        )}
-        {!geometryLoading && streetViewSrc && (
-          <iframe
-            title="Vista de calle"
-            className="ficha-street-iframe"
-            src={streetViewSrc}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            allowFullScreen
-          />
-        )}
-        {!geometryLoading && !streetViewSrc && (
-          <div className="ficha-media-placeholder">
-            Sin coordenadas para Street View.
-          </div>
-        )}
-      </section>
+        <section className="ficha-datos-col ficha-datos-street">
+          <h3 className="ficha-panel-title">Vista de calle</h3>
+          {geometryLoading && (
+            <div className="ficha-media-placeholder">Cargando ubicación…</div>
+          )}
+          {!geometryLoading && streetViewSrc && (
+            <iframe
+              title="Vista de calle"
+              className="ficha-street-iframe"
+              src={streetViewSrc}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
+          )}
+          {!geometryLoading && !streetViewSrc && (
+            <div className="ficha-media-placeholder">
+              Sin coordenadas para Street View.
+            </div>
+          )}
+        </section>
 
-      <section className="ficha-datos-col ficha-datos-map">
-        <div className="ficha-map-toolbar">
-          <h3 className="ficha-panel-title">Localización cartográfica</h3>
-          <div className="ficha-map-actions">
-            <button
-              type="button"
-              className="ficha-btn-secondary"
-              onClick={onOpenPrint}
-              disabled={geometryLoading}
-            >
-              Imprimir / PDF
-            </button>
-            <button
-              type="button"
-              className={`ficha-btn-secondary ficha-btn-capas${layersPanelOpen ? " active" : ""}`}
-              onClick={() => setLayersPanelOpen((v) => !v)}
-            >
-              Capas
-            </button>
+        <section className="ficha-datos-col ficha-datos-map">
+          <div className="ficha-map-toolbar">
+            <h3 className="ficha-panel-title">Localización cartográfica</h3>
+            <div className="ficha-map-actions">
+              <button
+                type="button"
+                className="ficha-btn-secondary"
+                onClick={onOpenPrint}
+                disabled={geometryLoading}
+              >
+                Imprimir / PDF
+              </button>
+              <button
+                type="button"
+                className={`ficha-btn-secondary ficha-btn-capas${layersPanelOpen ? " active" : ""}`}
+                onClick={() => setLayersPanelOpen((v) => !v)}
+              >
+                Capas
+              </button>
+            </div>
           </div>
-        </div>
-        {geometryLoading ? (
-          <div className="ficha-media-placeholder">Cargando mapa…</div>
-        ) : (
-          <FichaMiniMap
-            clave={padron.clave_catastral}
-            geometry={geometry}
-            geometryClave={geometryClave}
-            geonodeLayers={geonodeLayers}
-            wmsPath={wmsPath}
-            layersPanelOpen={layersPanelOpen}
-            onCloseLayersPanel={() => setLayersPanelOpen(false)}
-            onPredioSelect={onPredioSelect}
-          />
-        )}
-        <p className="ficha-map-status">
-          Cartografía:{" "}
-          {geometryLoading
-            ? "Consultando…"
-            : dibujadoEnMapa
-              ? "Dibujado en mapa"
-              : "Sin cartografía directa"}
-        </p>
-      </section>
+          {geometryLoading ? (
+            <div className="ficha-media-placeholder">Cargando mapa…</div>
+          ) : (
+            <FichaMiniMap
+              clave={padron.clave_catastral}
+              geometry={geometry}
+              fiscalStatus={fiscal}
+              searchHighlights={searchHighlights}
+              geometryClave={geometryClave}
+              geonodeLayers={geonodeLayers}
+              wmsPath={wmsPath}
+              layersPanelOpen={layersPanelOpen}
+              onCloseLayersPanel={() => setLayersPanelOpen(false)}
+              onPredioSelect={onPredioSelect}
+            />
+          )}
+          <p className="ficha-map-status">
+            Cartografía:{" "}
+            {geometryLoading
+              ? "Consultando…"
+              : dibujadoEnMapa
+                ? "Dibujado en mapa"
+                : "Sin cartografía directa"}
+          </p>
+        </section>
       </div>
     </div>
   );
@@ -322,6 +378,7 @@ export default function FichaCatastralModal({
   wmsPath = "/api/v1/geonode/wms",
   construccionesConfig,
   searchResults = [],
+  searchHighlights = null,
   onNavigate,
   onPredioPick,
   onClose,
@@ -342,8 +399,15 @@ export default function FichaCatastralModal({
   const [folioReal, setFolioReal] = useState<string | null>(null);
   const [folioRealLoading, setFolioRealLoading] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+  const [predialAdeudo, setPredialAdeudo] = useState<PredialAdeudoResponse | null>(null);
+  const [predialAdeudoLoading, setPredialAdeudoLoading] = useState(false);
+  const [predialAdeudoModalOpen, setPredialAdeudoModalOpen] = useState(false);
 
-  const fiscal = fiscalStatusFromAdeudos(padron.adeudo_2026, padron.adeudo_total);
+  const fiscalFallback = fiscalStatusFromAdeudos(
+    padron.adeudo_2026,
+    padron.adeudo_total
+  );
+  const fiscal = fiscalFromPredialAdeudo(predialAdeudo, fiscalFallback);
 
   const navIndex = searchResults.findIndex(
     (r) => r.clave_catastral === padron.clave_catastral
@@ -354,6 +418,7 @@ export default function FichaCatastralModal({
   useEffect(() => {
     if (!open) return;
     setTab("datos");
+    setPredialAdeudoModalOpen(false);
   }, [open, padron.clave_catastral]);
 
   useEffect(() => {
@@ -386,9 +451,46 @@ export default function FichaCatastralModal({
   }, [open, tab, padron.clave_catastral]);
 
   useEffect(() => {
+    if (!open || tab !== "datos") return;
+    setPredialAdeudoLoading(true);
+    setPredialAdeudo(null);
+    getPredialAdeudo(padron.clave_catastral)
+      .then((res) => setPredialAdeudo(res))
+      .catch(() =>
+        setPredialAdeudo({
+          clave_catastral: padron.clave_catastral,
+          tiene_adeudo: false,
+          estatus_consulta: "error",
+          periodo: null,
+          subtotal_importes: 0,
+          sobretasa_seguridad_publica: 0,
+          fomento_deportivo: 0,
+          rezago_fomento_deportivo: 0,
+          servicio_alumbrado: 0,
+          recargos: 0,
+          multas: 0,
+          gastos_ejecucion: 0,
+          descuentos: 0,
+          donativo_cruz_roja: 0,
+          donativo_bomberos: 0,
+          total_a_pagar: 0,
+          consultado_en: "",
+          fuente: "portal_mexicali",
+          error: "No se pudo consultar adeudo predial",
+        })
+      )
+      .finally(() => setPredialAdeudoLoading(false));
+  }, [open, tab, padron.clave_catastral]);
+
+  useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (predialAdeudoModalOpen) {
+        e.stopPropagation();
+        setPredialAdeudoModalOpen(false);
+        return;
+      }
       if (printPreviewOpen) {
         e.stopPropagation();
         setPrintPreviewOpen(false);
@@ -398,7 +500,7 @@ export default function FichaCatastralModal({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, printPreviewOpen]);
+  }, [open, onClose, printPreviewOpen, predialAdeudoModalOpen]);
 
   if (!open) return null;
 
@@ -411,167 +513,174 @@ export default function FichaCatastralModal({
     .join(" ");
 
   return (
-    <div
-      className="ficha-overlay"
-      role="presentation"
-      onClick={() => {
-        if (!printPreviewOpen) onClose();
-      }}
-    >
+    <>
       <div
-        ref={workspaceRef}
-        className={`ficha-workspace ${fiscalBadgeClass(fiscal)}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ficha-titulo"
-        style={{ width: size.width, height: size.height }}
-        onClick={(e) => e.stopPropagation()}
+        className="ficha-overlay"
+        role="presentation"
+        onClick={() => {
+          if (!printPreviewOpen && !predialAdeudoModalOpen) onClose();
+        }}
       >
-        <header className="ficha-header">
-          <div className="ficha-header-main">
-            <p className="ficha-header-kicker">Ficha catastral</p>
-            <h2 id="ficha-titulo">{val(padron.nombre_completo)}</h2>
-            <p className="ficha-header-direccion">{direccion || "Sin dirección"}</p>
-            <p className="ficha-header-clave">{padron.clave_catastral}</p>
-            <span className={`ficha-fiscal-chip ${fiscalBadgeClass(fiscal)}`}>
-              {fiscalLabel(fiscal)}
-            </span>
-          </div>
-          <div className="ficha-header-actions">
-            {searchResults.length > 1 && onNavigate && (
-              <div className="ficha-nav">
-                <button
-                  type="button"
-                  disabled={!canPrev}
-                  onClick={() => canPrev && onNavigate(searchResults[navIndex - 1])}
-                  aria-label="Predio anterior"
-                >
-                  ‹
-                </button>
-                <span>
-                  {navIndex + 1} / {searchResults.length}
-                </span>
-                <button
-                  type="button"
-                  disabled={!canNext}
-                  onClick={() => canNext && onNavigate(searchResults[navIndex + 1])}
-                  aria-label="Predio siguiente"
-                >
-                  ›
-                </button>
-              </div>
-            )}
-            <button
-              type="button"
-              className="ficha-btn-close"
-              onClick={onClose}
-              aria-label="Cerrar ficha"
-            >
-              ×
-            </button>
-          </div>
-        </header>
-
-        <nav className="ficha-tabs" aria-label="Secciones de la ficha">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tab === t.id ? "active" : ""}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-
         <div
-          className={`ficha-body${
-            tab === "construccion" ? " ficha-body-construccion" : ""
-          }`}
+          ref={workspaceRef}
+          className={`ficha-workspace ${fiscalBadgeClass(fiscal)}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ficha-titulo"
+          style={{ width: size.width, height: size.height }}
+          onClick={(e) => e.stopPropagation()}
         >
-          {tab === "datos" && (
-            <FichaDatosTab
-              padron={padron}
-              geometry={geometry}
-              geometryClave={geometryClave}
-              geometryLoading={geometryLoading}
-              dibujadoEnMapa={dibujadoEnMapa}
-              currency={currency}
-              propietarios={propietarios}
-              propietariosLoading={propietariosLoading}
-              propietariosError={propietariosError}
-              propietariosTotal={propietariosTotal}
-              folioReal={folioReal}
-              folioRealLoading={folioRealLoading}
-              geonodeLayers={fichaGeonodeLayers}
-              wmsPath={wmsPath}
-              onOpenPrint={() => setPrintPreviewOpen(true)}
-              onPredioSelect={onPredioPick}
-            />
-          )}
-          {tab === "construccion" && (
-            <FichaConstruccionTab
-              padron={padron}
-              geometry={geometry}
-              geometryClave={geometryClave}
-              geometryLoading={geometryLoading}
-              geometrySource={geometrySource}
-              geometryWfsLayer={geometryWfsLayer}
-              geonodeLayers={fichaGeonodeLayers}
-              wmsPath={wmsPath}
-              construccionesConfig={construccionesConfig}
-              currency={currency}
-              mapResizeNonce={mapResizeNonce}
-            />
-          )}
-          {tab === "archivo" && <TabPlaceholder title="Archivo digital" />}
-          {tab === "control-urbano" && (
-            <TabPlaceholder title="Control urbano" />
-          )}
-          {tab === "rppc" && <TabPlaceholder title="Registro Público de la Propiedad" />}
-          {tab === "num-oficial" && <TabPlaceholder title="Números oficiales" />}
-          {tab === "carta-2040" && <TabPlaceholder title="Carta Urbana 2040" />}
-          {tab === "colonia" && <TabPlaceholder title="Colonia / fraccionamiento" />}
-          {tab === "zona-h" && <TabPlaceholder title="Zona homogénea" />}
-        </div>
+          <header className="ficha-header">
+            <div className="ficha-header-main">
+              <p className="ficha-header-kicker">Ficha catastral</p>
+              <h2 id="ficha-titulo">{val(padron.nombre_completo)}</h2>
+              <p className="ficha-header-direccion">{direccion || "Sin dirección"}</p>
+              <p className="ficha-header-clave">{padron.clave_catastral}</p>
+              <span className={`ficha-fiscal-chip ${fiscalBadgeClass(fiscal)}`}>
+                {fiscalLabel(fiscal)}
+              </span>
+            </div>
+            <div className="ficha-header-actions">
+              {searchResults.length > 1 && onNavigate && (
+                <div className="ficha-nav">
+                  <button
+                    type="button"
+                    disabled={!canPrev}
+                    onClick={() => canPrev && onNavigate(searchResults[navIndex - 1])}
+                    aria-label="Predio anterior"
+                  >
+                    ‹
+                  </button>
+                  <span>
+                    {navIndex + 1} / {searchResults.length}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!canNext}
+                    onClick={() => canNext && onNavigate(searchResults[navIndex + 1])}
+                    aria-label="Predio siguiente"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                className="ficha-btn-close"
+                onClick={onClose}
+                aria-label="Cerrar ficha"
+              >
+                ×
+              </button>
+            </div>
+          </header>
 
-        <div
-          className="ficha-resize ficha-resize-e"
-          title="Ajustar ancho"
-          aria-label="Ajustar ancho de la ficha"
-          onPointerDown={(e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            e.currentTarget.setPointerCapture(e.pointerId);
-            startResize("e", e.clientX, e.clientY);
-          }}
-        />
-        <div
-          className="ficha-resize ficha-resize-s"
-          title="Ajustar alto"
-          aria-label="Ajustar alto de la ficha"
-          onPointerDown={(e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            e.currentTarget.setPointerCapture(e.pointerId);
-            startResize("s", e.clientX, e.clientY);
-          }}
-        />
-        <div
-          className="ficha-resize ficha-resize-se"
-          title="Redimensionar ficha"
-          aria-label="Redimensionar ficha"
-          onPointerDown={(e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            e.currentTarget.setPointerCapture(e.pointerId);
-            startResize("se", e.clientX, e.clientY);
-          }}
-        />
+          <nav className="ficha-tabs" aria-label="Secciones de la ficha">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={tab === t.id ? "active" : ""}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+
+          <div
+            className={`ficha-body${
+              tab === "construccion" ? " ficha-body-construccion" : ""
+            }`}
+          >
+            {tab === "datos" && (
+              <FichaDatosTab
+                padron={padron}
+                geometry={geometry}
+                geometryClave={geometryClave}
+                geometryLoading={geometryLoading}
+                dibujadoEnMapa={dibujadoEnMapa}
+                currency={currency}
+                propietarios={propietarios}
+                propietariosLoading={propietariosLoading}
+                propietariosError={propietariosError}
+                propietariosTotal={propietariosTotal}
+                folioReal={folioReal}
+                folioRealLoading={folioRealLoading}
+                geonodeLayers={fichaGeonodeLayers}
+                wmsPath={wmsPath}
+                onOpenPrint={() => setPrintPreviewOpen(true)}
+                onPredioSelect={onPredioPick}
+                predialAdeudo={predialAdeudo}
+                predialAdeudoLoading={predialAdeudoLoading}
+                onOpenAdeudo={() => setPredialAdeudoModalOpen(true)}
+                fiscal={fiscal}
+                searchHighlights={searchHighlights}
+              />
+            )}
+            {tab === "construccion" && (
+              <FichaConstruccionTab
+                padron={padron}
+                geometry={geometry}
+                geometryClave={geometryClave}
+                geometryLoading={geometryLoading}
+                geometrySource={geometrySource}
+                geometryWfsLayer={geometryWfsLayer}
+                geonodeLayers={fichaGeonodeLayers}
+                wmsPath={wmsPath}
+                construccionesConfig={construccionesConfig}
+                currency={currency}
+                mapResizeNonce={mapResizeNonce}
+              />
+            )}
+            {tab === "archivo" && <TabPlaceholder title="Archivo digital" />}
+            {tab === "control-urbano" && (
+              <TabPlaceholder title="Control urbano" />
+            )}
+            {tab === "rppc" && <TabPlaceholder title="Registro Público de la Propiedad" />}
+            {tab === "num-oficial" && <TabPlaceholder title="Números oficiales" />}
+            {tab === "carta-2040" && <TabPlaceholder title="Carta Urbana 2040" />}
+            {tab === "colonia" && <TabPlaceholder title="Colonia / fraccionamiento" />}
+            {tab === "zona-h" && <TabPlaceholder title="Zona homogénea" />}
+          </div>
+
+          <div
+            className="ficha-resize ficha-resize-e"
+            title="Ajustar ancho"
+            aria-label="Ajustar ancho de la ficha"
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              startResize("e", e.clientX, e.clientY);
+            }}
+          />
+          <div
+            className="ficha-resize ficha-resize-s"
+            title="Ajustar alto"
+            aria-label="Ajustar alto de la ficha"
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              startResize("s", e.clientX, e.clientY);
+            }}
+          />
+          <div
+            className="ficha-resize ficha-resize-se"
+            title="Redimensionar ficha"
+            aria-label="Redimensionar ficha"
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              startResize("se", e.clientX, e.clientY);
+            }}
+          />
+        </div>
       </div>
 
       <FichaPrintPreview
@@ -585,6 +694,12 @@ export default function FichaCatastralModal({
         wmsPath={wmsPath}
         onClose={() => setPrintPreviewOpen(false)}
       />
-    </div>
+
+      <PredialAdeudoModal
+        open={predialAdeudoModalOpen}
+        onClose={() => setPredialAdeudoModalOpen(false)}
+        data={predialAdeudo}
+      />
+    </>
   );
 }

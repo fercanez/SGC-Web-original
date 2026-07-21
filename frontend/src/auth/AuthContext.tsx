@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMe = useCallback(async (token: string, signal?: AbortSignal) => {
     const res = await fetchWithTimeout(
-      `${getApiUrl()}/api/v1/auth/me`,
+      `${getApiUrl()}/v1/auth/me`,
       {
         headers: { Authorization: `Bearer ${token}` },
         signal,
@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapAbort.current?.abort();
 
     const res = await fetchWithTimeout(
-      `${getApiUrl()}/api/v1/auth/login`,
+      `${getApiUrl()}/v1/auth/login`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

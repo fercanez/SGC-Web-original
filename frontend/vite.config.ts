@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       port: 5173,
       strictPort: true,
+      allowedHosts: ["fcgeosistemas.hopto.org", "192.168.1.96", "localhost"],
       proxy: {
         "/api": {
           target: apiTarget,

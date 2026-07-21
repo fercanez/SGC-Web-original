@@ -9,7 +9,7 @@ export function buildGeonodeWmsTileUrl(
   proxyPath: string,
   layerName: string
 ): string {
-  const base = `${getApiUrl()}${proxyPath}`;
+  const base = proxyPath.startsWith("/") ? proxyPath : `${getApiUrl()}/${proxyPath}`;
   const layer = encodeURIComponent(layerName);
   return (
     `${base}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap` +

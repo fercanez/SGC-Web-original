@@ -14,11 +14,14 @@ import {
   isWgs84Geometry,
 } from "../utils/geometry";
 import {
+  FISCAL_MAP_FILL_RGB,
+  FISCAL_MAP_LINE,
   SELECTED_MAP_FILL_OPACITY,
   SELECTED_MAP_HALO,
   SELECTED_MAP_HALO_WIDTH,
   SELECTED_MAP_LINE,
   SELECTED_MAP_LINE_WIDTH,
+  type FiscalStatus,
 } from "../utils/fiscal";
 import {
   buildInitialOpacity,
@@ -43,6 +46,8 @@ import FichaMapLayersPanel, {
 interface Props {
   clave: string;
   geometry: GeoJSON.Geometry | null;
+  fiscalStatus?: FiscalStatus;
+  searchHighlights?: GeoJSON.FeatureCollection | null;
   /** Clave catastral a la que pertenece `geometry` (evita flashes al cambiar predio). */
   geometryClave?: string | null;
   geonodeLayers: GeonodeLayer[];
@@ -93,6 +98,8 @@ function fitMapToGeometry(map: maplibregl.Map, geometry: GeoJSON.Geometry) {
 export default function FichaMiniMap({
   clave,
   geometry,
+  fiscalStatus = "sin_adeudo",
+  searchHighlights = null,
   geometryClave,
   geonodeLayers,
   wmsPath,
@@ -170,7 +177,13 @@ export default function FichaMiniMap({
   }, [initialVisible, initialOpacity, geonodeLayers, clave]);
 
   const layerKey = `${geonodeLayers.map((l) => l.layer).join("|")}|${wmsPath}`;
-  const mapBootKey = `${clave}|${geometryKey}|${layerKey}`;
+  const highlightsKey = useMemo(
+    () =>
+      searchHighlights?.features?.map((f) => String(f.properties?.clave ?? "")).join("|") ?? "no-highlights",
+    [searchHighlights]
+  );
+
+  const mapBootKey = `${clave}|${geometryKey}|${layerKey}|${fiscalStatus}|${highlightsKey}`;
 
   const wfsPickConfig = useMemo((): PublicConfig | null => {
     const predios = geonodeLayers.find((l) => layerRole(l) === "predios");
@@ -206,12 +219,52 @@ export default function FichaMiniMap({
       ? (centroidFromGeometry(effectiveGeometry) ?? [-115.468278, 32.624639])
       : [-115.468278, 32.624639];
 
+    const highlightFill = "rgba(37, 99, 235, 0.22)";
+    const highlightLine = "#1d4ed8";
+
+    const miniSearchHighlights: GeoJSON.FeatureCollection =
+      searchHighlights && searchHighlights.features?.length
+        ? searchHighlights
+        : { type: "FeatureCollection", features: [] };
+
     const sources: Record<string, maplibregl.SourceSpecification> = {
       basemap: getBaseMapRasterSource(baseMap),
+      "search-highlights-mini": { type: "geojson", data: miniSearchHighlights },
       highlight: { type: "geojson", data: fc },
     };
     const layers: maplibregl.LayerSpecification[] = [
       { id: "basemap", type: "raster", source: "basemap" },
+      {
+        id: "search-highlight-fill-mini",
+        type: "fill",
+        source: "search-highlights-mini",
+        paint: {
+          "fill-color": [
+            "match",
+            ["coalesce", ["get", "fiscal"], "sin_adeudo"],
+            "con_adeudo",
+            FISCAL_MAP_FILL_RGB.con_adeudo,
+            FISCAL_MAP_FILL_RGB.sin_adeudo,
+          ],
+          "fill-opacity": 0.45,
+        },
+      },
+      {
+        id: "search-highlight-line-mini",
+        type: "line",
+        source: "search-highlights-mini",
+        paint: {
+          "line-color": [
+            "match",
+            ["coalesce", ["get", "fiscal"], "sin_adeudo"],
+            "con_adeudo",
+            FISCAL_MAP_LINE.con_adeudo,
+            FISCAL_MAP_LINE.sin_adeudo,
+          ],
+          "line-width": 1.2,
+          "line-opacity": 0.95,
+        },
+      },
     ];
 
     for (const gl of geonodeLayers) {
@@ -235,7 +288,7 @@ export default function FichaMiniMap({
         type: "fill",
         source: "highlight",
         paint: {
-          "fill-color": "rgba(0, 0, 255, 0.12)",
+          "fill-color": highlightFill,
           "fill-opacity": SELECTED_MAP_FILL_OPACITY,
         },
       },
@@ -253,7 +306,7 @@ export default function FichaMiniMap({
         type: "line",
         source: "highlight",
         paint: {
-          "line-color": SELECTED_MAP_LINE,
+          "line-color": highlightLine,
           "line-width": SELECTED_MAP_LINE_WIDTH,
         },
       }

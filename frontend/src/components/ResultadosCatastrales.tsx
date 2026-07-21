@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "../utils/geometry";
 import {
   fiscalChipClass,
@@ -6,7 +7,11 @@ import {
   fiscalRowClass,
   fiscalStatusFromAdeudos,
 } from "../utils/fiscal";
-import type { PredioAlfanumericoRecord } from "../api";
+import {
+  getPredialAdeudo,
+  type PredioAlfanumericoRecord,
+} from "../api";
+import type { PredialAdeudoResponse } from "../types/predial";
 
 export type ResultsPanelMode = "open" | "minimized" | "hidden";
 
@@ -32,6 +37,22 @@ function cartoStatus(r: PredioAlfanumericoRecord) {
   return r.parcel_id ? "DIBUJADO" : "SIN CARTOGRAFÍA";
 }
 
+function fiscalFromPredialAdeudo(
+  predialAdeudo: PredialAdeudoResponse | null,
+  fallback: ReturnType<typeof fiscalStatusFromAdeudos>
+) {
+  if (!predialAdeudo) return fallback;
+
+  if (
+    predialAdeudo.estatus_consulta === "con_adeudo" ||
+    predialAdeudo.total_a_pagar > 0
+  ) {
+    return "con_adeudo";
+  }
+
+  return "sin_adeudo";
+}
+
 export default function ResultadosCatastrales({
   items,
   activeClave,
@@ -49,16 +70,86 @@ export default function ResultadosCatastrales({
   onPageChange,
   loading = false,
 }: Props) {
+  const [predialMap, setPredialMap] = useState<Record<string, PredialAdeudoResponse>>({});
+  const [predialLoading, setPredialLoading] = useState(false);
+
   const q = filter.trim().toUpperCase();
-  const rows = q
-    ? items.filter(
-        (r) =>
-          r.clave_catastral.toUpperCase().includes(q) ||
-          (r.nombre_completo ?? "").toUpperCase().includes(q) ||
-          (r.colonia ?? "").toUpperCase().includes(q) ||
-          (r.calle ?? "").toUpperCase().includes(q)
-      )
-    : items;
+
+  const rows = useMemo(() => {
+    return q
+      ? items.filter(
+          (r) =>
+            r.clave_catastral.toUpperCase().includes(q) ||
+            (r.nombre_completo ?? "").toUpperCase().includes(q) ||
+            (r.colonia ?? "").toUpperCase().includes(q) ||
+            (r.calle ?? "").toUpperCase().includes(q)
+        )
+      : items;
+  }, [items, q]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const claves = items
+      .map((r) => r.clave_catastral?.trim())
+      .filter((v): v is string => Boolean(v));
+
+    if (claves.length === 0) {
+      setPredialMap({});
+      return;
+    }
+
+    setPredialLoading(true);
+
+    Promise.all(
+      claves.map(async (clave) => {
+        try {
+          const res = await getPredialAdeudo(clave);
+          return [clave, res] as const;
+        } catch {
+          return [
+            clave,
+            {
+              clave_catastral: clave,
+              tiene_adeudo: false,
+              estatus_consulta: "sin_adeudo",
+              periodo: null,
+              subtotal_importes: 0,
+              sobretasa_seguridad_publica: 0,
+              fomento_deportivo: 0,
+              rezago_fomento_deportivo: 0,
+              servicio_alumbrado: 0,
+              recargos: 0,
+              multas: 0,
+              gastos_ejecucion: 0,
+              descuentos: 0,
+              donativo_cruz_roja: 0,
+              donativo_bomberos: 0,
+              total_a_pagar: 0,
+              consultado_en: "",
+              fuente: "portal_mexicali",
+              mensaje: "Sin adeudo",
+            } satisfies PredialAdeudoResponse,
+          ] as const;
+        }
+      })
+    )
+      .then((entries) => {
+        if (cancelled) return;
+        const mapped: Record<string, PredialAdeudoResponse> = {};
+        for (const [clave, value] of entries) {
+          mapped[clave] = value;
+        }
+        setPredialMap(mapped);
+      })
+      .finally(() => {
+        if (!cancelled) setPredialLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   if (panelMode === "hidden") {
     return (
@@ -160,60 +251,69 @@ export default function ResultadosCatastrales({
                   </tr>
                 )}
                 {rows.map((r) => {
-                  const fiscal = fiscalStatusFromAdeudos(
+                  const fallback = fiscalStatusFromAdeudos(
                     r.adeudo_2026,
                     r.adeudo_total
                   );
+
+                  const fiscal = fiscalFromPredialAdeudo(
+                    predialMap[r.clave_catastral] ?? null,
+                    fallback
+                  );
+
                   const rowCls = [
                     fiscalRowClass(fiscal),
                     activeClave === r.clave_catastral ? "selected" : "",
                   ]
                     .filter(Boolean)
                     .join(" ");
+
                   return (
-                  <tr
-                    key={r.id}
-                    className={rowCls || undefined}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelect(r);
-                      }
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelect(r);
-                    }}
-                  >
-                    <td>
-                      <code className={fiscalClaveClass(fiscal)}>
-                        {r.clave_catastral}
-                      </code>
-                    </td>
-                    <td>{r.nombre_completo ?? "—"}</td>
-                    <td>{r.colonia ?? "—"}</td>
-                    <td>{r.calle ?? "—"}</td>
-                    <td>{r.numof ?? "—"}</td>
-                    <td>{r.zonah ?? "—"}</td>
-                    <td>{formatMoney(r.valor2026, currency)}</td>
-                    <td>{r.descripcion_uso ?? "—"}</td>
-                    <td>
-                      <span className={fiscalChipClass(fiscal)}>
-                        {fiscalLabel(fiscal)}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={
-                          r.parcel_id ? "cm-carto-ok" : "cm-carto-warn"
+                    <tr
+                      key={r.id}
+                      className={rowCls || undefined}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelect(r);
                         }
-                      >
-                        {cartoStatus(r)}
-                      </span>
-                    </td>
-                  </tr>
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelect(r);
+                      }}
+                    >
+                      <td>
+                        <code className={fiscalClaveClass(fiscal)}>
+                          {r.clave_catastral}
+                        </code>
+                      </td>
+                      <td>{r.nombre_completo ?? "—"}</td>
+                      <td>{r.colonia ?? "—"}</td>
+                      <td>{r.calle ?? "—"}</td>
+                      <td>{r.numof ?? "—"}</td>
+                      <td>{r.zonah ?? "—"}</td>
+                      <td>{formatMoney(r.valor2026, currency)}</td>
+                      <td>{r.descripcion_uso ?? "—"}</td>
+                      <td>
+                        <span className={fiscalChipClass(fiscal)}>
+                          {predialLoading && !predialMap[r.clave_catastral]
+                            ? "Consultando…"
+                            : fiscalLabel(fiscal)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={
+                            r.parcel_id ? "cm-carto-ok" : "cm-carto-warn"
+                          }
+                        >
+                          {cartoStatus(r)}
+                        </span>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
